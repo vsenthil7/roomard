@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { snakeToCamel, camelToSnake } from '../../src/plugin.js';
+import { snakeToCamel, camelToSnake } from '../src/plugin.js';
 import {
   rolesToPermissions,
   hasPermission,
   requirePermission,
   verifyAccessToken,
   authConfigFromEnv,
-} from '../../src/auth.js';
+} from '../src/auth.js';
 import { SignJWT } from 'jose';
 
 describe('case translation', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { hash } from 'bcryptjs';
-import { AuthService, authServiceConfigFromEnv } from '../../src/service.js';
+import { AuthService, authServiceConfigFromEnv } from '../src/service.js';
 
 interface FakeRow {
   rows: unknown[];

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { verifyMewsSignature, ingestMewsReservation } from '../../src/server.js';
+import { verifyMewsSignature, ingestMewsReservation } from '../src/server.js';
 
 describe('verifyMewsSignature', () => {
   const secret = 'webhook-secret-1234567890';
