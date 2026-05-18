@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Test artifacts
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker-data/
+
+# Secrets — never commit
+secrets/
+*.pem
+*.key
+*.crt
+
+# Local artefacts
+tmp/
+.cache/

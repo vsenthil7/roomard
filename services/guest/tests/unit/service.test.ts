@@ -1,0 +1,199 @@
+import { describe, it, expect, vi } from 'vitest';
+import { GuestRepo, buildSayThis } from '../src/service.js';
+
+function fakeClient(handlers: Array<(sql: string, params: unknown[]) => { rows: unknown[] }>) {
+  let idx = 0;
+  return {
+    query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      const h = handlers[idx];
+      if (!h) throw new Error(`unexpected query #${idx + 1}: ${sql.slice(0, 60)}`);
+      idx += 1;
+      return h(sql, params);
+    }),
+    release: vi.fn(),
+  } as unknown as import('pg').PoolClient;
+}
+
+describe('GuestRepo', () => {
+  it('create checks for duplicate email then inserts', async () => {
+    const repo = new GuestRepo();
+    const client = fakeClient([
+      () => ({ rows: [] }), // dedupe check
+      () => ({
+        rows: [
+          {
+            id: 'g1',
+            tenant_id: 't1',
+            display_name: 'Jane',
+            email: 'jane@x',
+            email_lower: 'jane@x',
+            phone_e164: null,
+            home_country_code: null,
+            name_variants: [],
+            pms_guest_ids: {},
+            loyalty_tiers: {},
+            attention_flags: [],
+            processing_restrictions: [],
+            created_at: new Date('2026-05-18T10:00:00Z'),
+            updated_at: new Date('2026-05-18T10:00:00Z'),
+          },
+        ],
+      }),
+    ]);
+    const guest = await repo.create(client, { displayName: 'Jane', email: 'jane@x' });
+    expect(guest.id).toBe('g1');
+    expect(guest.displayName).toBe('Jane');
+  });
+
+  it('create throws ConflictError on duplicate email', async () => {
+    const repo = new GuestRepo();
+    const client = fakeClient([() => ({ rows: [{ id: 'existing' }] })]);
+    await expect(repo.create(client, { displayName: 'Jane', email: 'jane@x' })).rejects.toThrow(
+      /already exists/i,
+    );
+  });
+
+  it('getById returns null-style NotFoundError on empty', async () => {
+    const repo = new GuestRepo();
+    const client = fakeClient([() => ({ rows: [] })]);
+    await expect(
+      repo.getById(client, '00000000-0000-4000-8000-000000000001'),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('patch refuses empty payload', async () => {
+    const repo = new GuestRepo();
+    const client = fakeClient([]);
+    await expect(
+      repo.patch(client, '00000000-0000-4000-8000-000000000001', {}),
+    ).rejects.toThrow(/no fields/i);
+  });
+
+  it('patch sets only provided fields', async () => {
+    const repo = new GuestRepo();
+    const client = fakeClient([
+      (sql) => {
+        expect(sql).toMatch(/UPDATE guests SET/);
+        expect(sql).toMatch(/display_name = \$1/);
+        return {
+          rows: [
+            {
+              id: 'g1',
+              tenant_id: 't1',
+              display_name: 'Janet',
+              email: null,
+              email_lower: null,
+              phone_e164: null,
+              home_country_code: null,
+              name_variants: [],
+              pms_guest_ids: {},
+              loyalty_tiers: {},
+              attention_flags: [],
+              processing_restrictions: [],
+              created_at: new Date(),
+              updated_at: new Date(),
+            },
+          ],
+        };
+      },
+    ]);
+    const out = await repo.patch(client, '00000000-0000-4000-8000-000000000001', {
+      displayName: 'Janet',
+    });
+    expect(out.displayName).toBe('Janet');
+  });
+
+  it('search supports query string and pagination', async () => {
+    const repo = new GuestRepo();
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      id: `g${i + 1}`,
+      tenant_id: 't1',
+      display_name: `Guest ${i + 1}`,
+      email: null,
+      email_lower: null,
+      phone_e164: null,
+      home_country_code: null,
+      name_variants: [],
+      pms_guest_ids: {},
+      loyalty_tiers: {},
+      attention_flags: [],
+      processing_restrictions: [],
+      created_at: new Date(2026, 4, 18 - i, 10, 0, 0),
+      updated_at: new Date(2026, 4, 18 - i, 10, 0, 0),
+      active_pref_count: '2',
+      upcoming_arrival_at: null,
+    }));
+    const client = fakeClient([() => ({ rows })]);
+    const result = await repo.search(client, { q: 'Guest', limit: 5 });
+    expect(result.items).toHaveLength(3);
+    expect(result.hasMore).toBe(false);
+    expect(result.items[0]!.activePreferenceCount).toBe(2);
+  });
+});
+
+describe('buildSayThis', () => {
+  it('returns a suggestion using AI gateway result', async () => {
+    const repo = new GuestRepo();
+    void repo;
+    const client = fakeClient([
+      // getById
+      () => ({
+        rows: [
+          {
+            id: 'g1',
+            tenant_id: 't1',
+            display_name: 'Jane',
+            email: null,
+            email_lower: null,
+            phone_e164: null,
+            home_country_code: null,
+            name_variants: [],
+            pms_guest_ids: {},
+            loyalty_tiers: { roomard: 'platinum' },
+            attention_flags: [],
+            processing_restrictions: [],
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        ],
+      }),
+      // getPreferences main query
+      () => ({
+        rows: [
+          {
+            id: 'p1',
+            guest_id: 'g1',
+            kind: 'pillow',
+            polarity: 'requirement',
+            detail: 'Two firm pillows',
+            confidence_value: '0.9',
+            confidence_calibration: 'reinforced',
+            status: 'active',
+            source: 'card',
+            first_observed_at: new Date(),
+            last_reinforced_at: new Date(),
+            reinforcement_count: 2,
+            supersedes_id: null,
+          },
+        ],
+      }),
+      // preference_evidence link query
+      () => ({ rows: [] }),
+    ]);
+
+    const aiInvoke = vi.fn(async () => ({
+      output: { items: [{ sayThis: 'Welcome back Jane.', callouts: ['Two firm pillows'] }] },
+      modelId: 'ernie-4.5-mock',
+      promptVersion: 'v1',
+    }));
+
+    const out = await buildSayThis(
+      client,
+      { aiInvoke },
+      { guestId: 'g1', tenantId: 't1', requestId: 'r1' },
+    );
+    expect(out.greeting).toContain('Jane');
+    expect(out.modelId).toContain('ernie');
+    expect(aiInvoke).toHaveBeenCalledOnce();
+  });
+});

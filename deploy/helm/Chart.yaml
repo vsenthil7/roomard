@@ -1,0 +1,13 @@
+apiVersion: v2
+name: roomard
+description: Roomard — AI Guest Memory Engine
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Roomard Engineering
+    email: engineering@roomard.com
+keywords:
+  - hospitality
+  - guest-experience
+  - ai

@@ -1,0 +1,110 @@
+/**
+ * Route table — declarative mapping from public URL to internal service.
+ * Each row says: when request matches `pathPattern` with `method`, forward
+ * to `upstream` after enforcing `requiredPermission` (or 'public' for none).
+ *
+ * Keep this list explicit — no blanket forwards. Anything not listed gets 404.
+ */
+export interface RouteRule {
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT';
+  pathPattern: string;
+  upstream: keyof Upstreams;
+  requiredPermission: string | 'public';
+  /** If true, request must carry a recent MFA-verified session (claim mfa=true). */
+  requireMfa?: boolean;
+}
+
+export interface Upstreams {
+  auth: string;
+  tenant: string;
+  guest: string;
+  capture: string;
+  brief: string;
+  exception: string;
+  audit: string;
+  ingest: string;
+}
+
+export const ROUTES: RouteRule[] = [
+  // Auth — public surface
+  { method: 'POST', pathPattern: '/v1/auth/password/login', upstream: 'auth', requiredPermission: 'public' },
+  { method: 'POST', pathPattern: '/v1/auth/mfa/verify', upstream: 'auth', requiredPermission: 'public' },
+  { method: 'POST', pathPattern: '/v1/auth/refresh', upstream: 'auth', requiredPermission: 'public' },
+  { method: 'POST', pathPattern: '/v1/auth/sso/start', upstream: 'auth', requiredPermission: 'public' },
+  { method: 'POST', pathPattern: '/v1/auth/sso/callback', upstream: 'auth', requiredPermission: 'public' },
+  { method: 'POST', pathPattern: '/v1/auth/logout', upstream: 'auth', requiredPermission: 'public' },
+  { method: 'GET', pathPattern: '/v1/auth/me', upstream: 'auth', requiredPermission: 'public' },
+
+  // Tenant
+  { method: 'GET', pathPattern: '/v1/tenant', upstream: 'tenant', requiredPermission: 'tenant.read' },
+  { method: 'GET', pathPattern: '/v1/properties', upstream: 'tenant', requiredPermission: 'property.read' },
+  { method: 'POST', pathPattern: '/v1/properties', upstream: 'tenant', requiredPermission: 'property.write' },
+  { method: 'GET', pathPattern: '/v1/properties/:id', upstream: 'tenant', requiredPermission: 'property.read' },
+  { method: 'GET', pathPattern: '/v1/roles', upstream: 'tenant', requiredPermission: 'tenant.read' },
+
+  // Guest
+  { method: 'POST', pathPattern: '/v1/guests', upstream: 'guest', requiredPermission: 'guest.write' },
+  { method: 'GET', pathPattern: '/v1/guests', upstream: 'guest', requiredPermission: 'guest.read' },
+  { method: 'GET', pathPattern: '/v1/guests/:id', upstream: 'guest', requiredPermission: 'guest.read' },
+  { method: 'PATCH', pathPattern: '/v1/guests/:id', upstream: 'guest', requiredPermission: 'guest.write' },
+  { method: 'GET', pathPattern: '/v1/guests/:id/preferences', upstream: 'guest', requiredPermission: 'preference.read' },
+  { method: 'GET', pathPattern: '/v1/guests/:id/history', upstream: 'guest', requiredPermission: 'guest.read' },
+  { method: 'GET', pathPattern: '/v1/guests/:id/say-this', upstream: 'guest', requiredPermission: 'guest.read' },
+
+  // Capture
+  { method: 'POST', pathPattern: '/v1/captures', upstream: 'capture', requiredPermission: 'capture.write' },
+  { method: 'GET', pathPattern: '/v1/captures/:evidenceId', upstream: 'capture', requiredPermission: 'capture.read' },
+
+  // Brief
+  { method: 'POST', pathPattern: '/v1/briefs/generate', upstream: 'brief', requiredPermission: 'brief.write' },
+  { method: 'GET', pathPattern: '/v1/properties/:propertyId/briefs/today', upstream: 'brief', requiredPermission: 'brief.read' },
+  { method: 'GET', pathPattern: '/v1/briefs/:id', upstream: 'brief', requiredPermission: 'brief.read' },
+
+  // Exception
+  { method: 'GET', pathPattern: '/v1/exceptions', upstream: 'exception', requiredPermission: 'exception.read' },
+  { method: 'GET', pathPattern: '/v1/exceptions/:id', upstream: 'exception', requiredPermission: 'exception.read' },
+  { method: 'PATCH', pathPattern: '/v1/exceptions/:id', upstream: 'exception', requiredPermission: 'exception.write' },
+
+  // Audit
+  { method: 'GET', pathPattern: '/v1/audit/events', upstream: 'audit', requiredPermission: 'audit.read' },
+  { method: 'GET', pathPattern: '/v1/audit/verify', upstream: 'audit', requiredPermission: 'audit.read' },
+  { method: 'POST', pathPattern: '/v1/audit/export', upstream: 'audit', requiredPermission: 'audit.read', requireMfa: true },
+
+  // Ingest (webhooks — public, secured by HMAC inside the service)
+  { method: 'POST', pathPattern: '/webhooks/mews', upstream: 'ingest', requiredPermission: 'public' },
+];
+
+/**
+ * Match a URL path against a pathPattern with `:name` placeholders.
+ * Returns the rule if matched, or null. Method must also match.
+ */
+export function matchRoute(method: string, path: string): RouteRule | null {
+  for (const rule of ROUTES) {
+    if (rule.method !== method) continue;
+    const pattern = rule.pathPattern.split('/');
+    const candidate = path.split('?')[0]!.split('/');
+    if (pattern.length !== candidate.length) continue;
+    let matched = true;
+    for (let i = 0; i < pattern.length; i += 1) {
+      const p = pattern[i]!;
+      const c = candidate[i]!;
+      if (p.startsWith(':')) continue;
+      if (p !== c) { matched = false; break; }
+    }
+    if (matched) return rule;
+  }
+  return null;
+}
+
+export function upstreamsFromEnv(): Upstreams {
+  return {
+    auth: process.env.AUTH_URL ?? 'http://localhost:3001',
+    tenant: process.env.TENANT_URL ?? 'http://localhost:3002',
+    guest: process.env.GUEST_URL ?? 'http://localhost:3003',
+    capture: process.env.CAPTURE_URL ?? 'http://localhost:3004',
+    brief: process.env.BRIEF_URL ?? 'http://localhost:3005',
+    exception: process.env.EXCEPTION_URL ?? 'http://localhost:3006',
+    audit: process.env.AUDIT_URL ?? 'http://localhost:3007',
+    ingest: process.env.INGEST_URL ?? 'http://localhost:3009',
+  };
+}

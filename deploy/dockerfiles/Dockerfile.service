@@ -1,0 +1,37 @@
+# Roomard Node service base image.
+#
+# Build stage: install full deps + build the workspace.
+# Runtime stage: copy pruned production deps + built dist.
+#
+# Each service has its own Dockerfile that ARG SERVICE=<name> and inherits this.
+
+FROM node:20-alpine AS base
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json .npmrc* ./
+COPY packages ./packages
+COPY services ./services
+COPY apps ./apps
+
+FROM base AS deps
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
+FROM deps AS builder
+RUN pnpm run build
+
+FROM node:20-alpine AS runtime
+ARG SERVICE
+ENV NODE_ENV=production
+RUN corepack enable && addgroup -S roomard && adduser -S -G roomard roomard
+WORKDIR /app
+COPY --from=builder --chown=roomard:roomard /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=builder --chown=roomard:roomard /app/packages ./packages
+COPY --from=builder --chown=roomard:roomard /app/services/${SERVICE} ./services/${SERVICE}
+RUN pnpm install --frozen-lockfile --prod --filter "./services/${SERVICE}..."
+USER roomard
+ENV SERVICE_NAME=${SERVICE}
+EXPOSE 3000
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+CMD ["sh", "-c", "node services/${SERVICE_NAME}/dist/server.js"]

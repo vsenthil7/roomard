@@ -1,0 +1,61 @@
+# Default values for the Roomard Helm chart.
+# Override in environment-specific files (prod.yaml, staging.yaml).
+
+global:
+  imageRegistry: roomard
+  imageTag: "0.1.0"
+  imagePullPolicy: IfNotPresent
+  environment: production
+  domain: roomard.com
+
+# Services. Each renders into a Deployment + Service + (optional) PodDisruptionBudget.
+services:
+  apiGateway:
+    enabled: true
+    replicas: 3
+    resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
+    env:
+      RATE_LIMIT_MAX: "300"
+      RATE_LIMIT_WINDOW_MS: "60000"
+  auth: { enabled: true, replicas: 2 }
+  tenant: { enabled: true, replicas: 2 }
+  guest: { enabled: true, replicas: 3 }
+  capture: { enabled: true, replicas: 3 }
+  brief: { enabled: true, replicas: 2 }
+  exception: { enabled: true, replicas: 2 }
+  audit: { enabled: true, replicas: 2 }
+  ingest: { enabled: true, replicas: 2 }
+  aiGateway: { enabled: true, replicas: 2 }
+
+web:
+  enabled: true
+  replicas: 2
+  ingress:
+    enabled: true
+    host: app.roomard.com
+    tls: { secretName: roomard-web-tls }
+
+postgres:
+  external: true
+  # If external: false, deploys a Postgres instance via bitnami/postgresql subchart.
+  # In prod use Baidu RDS EU or AWS RDS Frankfurt.
+  externalConnectionSecret: roomard-postgres
+
+redis:
+  external: true
+  externalConnectionSecret: roomard-redis
+
+objectStore:
+  externalConnectionSecret: roomard-object-store
+  bucket: roomard-evidence
+
+secrets:
+  # Names of pre-existing Kubernetes Secret objects.
+  jwt: roomard-jwt
+  qianfan: roomard-qianfan
+  smtp: roomard-smtp
+  sentry: roomard-sentry
+
+monitoring:
+  prometheus: { enabled: true }
+  sentry: { enabled: true }

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "declaration": true
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/errors" },
+    { "path": "../../packages/logger" },
+    { "path": "../../packages/schemas" },
+    { "path": "../../packages/service-framework" }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "name": "@roomard/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./pool": {
+      "import": "./dist/pool.js",
+      "types": "./dist/pool.d.ts"
+    },
+    "./tenant-context": {
+      "import": "./dist/tenant-context.js",
+      "types": "./dist/tenant-context.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "typecheck": "tsc -b --noEmit",
+    "migrate": "tsx src/cli/migrate.ts up",
+    "migrate:down": "tsx src/cli/migrate.ts down",
+    "seed": "tsx src/cli/seed.ts",
+    "reset": "tsx src/cli/migrate.ts reset && tsx src/cli/seed.ts",
+    "test": "vitest run",
+    "test:unit": "vitest run --dir tests/unit",
+    "test:integration": "vitest run --dir tests/integration",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@roomard/errors": "workspace:*",
+    "@roomard/logger": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/pg": "^8.11.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

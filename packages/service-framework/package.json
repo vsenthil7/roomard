@@ -1,0 +1,29 @@
+{
+  "name": "@roomard/service-framework",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": { ".": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@roomard/db": "workspace:*",
+    "@roomard/errors": "workspace:*",
+    "@roomard/logger": "workspace:*",
+    "@roomard/schemas": "workspace:*",
+    "@fastify/sensible": "^6.0.1",
+    "@fastify/multipart": "^9.0.1",
+    "fastify": "^5.0.0",
+    "jose": "^5.9.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}
