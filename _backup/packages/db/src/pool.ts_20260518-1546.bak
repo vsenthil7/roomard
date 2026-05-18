@@ -112,19 +112,8 @@ export function createPool(config: DbConfig): RoomardPool {
  */
 export class RoomardPool {
   private closed = false;
-  private readonly pool: pg.Pool;
 
-  constructor(input: pg.Pool | DbConfig) {
-    // Accept either a constructed pg.Pool (test scenarios with mocks)
-    // or a DbConfig (production / service boot). Keeps call sites stable
-    // across the workspace.
-    if (input instanceof Pool) {
-      this.pool = input;
-    } else {
-      const wrapped = createPool(input);
-      this.pool = wrapped.raw;
-    }
-  }
+  constructor(private readonly pool: pg.Pool) {}
 
   /** Direct query — only for migrations / ops scripts. App code should use withTenantContext. */
   async query<T extends QueryResultRow = QueryResultRow>(
