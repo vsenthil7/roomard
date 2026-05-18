@@ -7,15 +7,15 @@ import {
   ConfidenceSchema,
   IsoDateTimeSchema,
   IsoDateSchema,
-} from '../src/common.js';
-import { GuestCreateRequestSchema, PreferenceSchema } from '../src/guest.js';
-import { CardCaptureRequestSchema, OcrResultSchema } from '../src/capture.js';
-import { BriefGenerateRequestSchema, BriefItemPrioritySchema } from '../src/brief.js';
-import { ExceptionPatchRequestSchema, ExceptionKindSchema } from '../src/exception.js';
-import { ReviewLinkRequestSchema } from '../src/review.js';
-import { PropertyCreateRequestSchema, TenantTierSchema } from '../src/tenant.js';
-import { AuditExportRequestSchema } from '../src/audit.js';
-import { PasswordLoginRequestSchema, LoginResponseSchema, TokenPairSchema } from '../src/auth.js';
+} from '../../src/common.js';
+import { GuestCreateRequestSchema, PreferenceSchema } from '../../src/guest.js';
+import { CardCaptureRequestSchema, OcrResultSchema } from '../../src/capture.js';
+import { BriefGenerateRequestSchema, BriefItemPrioritySchema } from '../../src/brief.js';
+import { ExceptionPatchRequestSchema, ExceptionKindSchema } from '../../src/exception.js';
+import { ReviewLinkRequestSchema } from '../../src/review.js';
+import { PropertyCreateRequestSchema, TenantTierSchema } from '../../src/tenant.js';
+import { AuditExportRequestSchema } from '../../src/audit.js';
+import { PasswordLoginRequestSchema, LoginResponseSchema, TokenPairSchema } from '../../src/auth.js';
 
 describe('common schemas', () => {
   it('accepts a valid UUID', () => {
@@ -33,7 +33,7 @@ describe('common schemas', () => {
   });
 
   it('rejects emails longer than 320 chars', () => {
-    expect(() => EmailSchema.parse('a'.repeat(311) + '@bar.com')).toThrow();
+    expect(() => EmailSchema.parse('a'.repeat(313) + '@bar.com')).toThrow();
   });
 
   it('accepts E.164 phone numbers', () => {
