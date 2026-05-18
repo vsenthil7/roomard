@@ -8,7 +8,7 @@
  * Sensitive fields are redacted by default: password, password_hash, token, secret,
  * authorization, cookie, mfa_secret, credentials_ref.
  */
-import { pino, stdSerializers, stdTimeFunctions, type Logger as PinoLogger, type LoggerOptions } from 'pino';
+import { pino, type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
 export interface CreateLoggerOptions {
   name: string;
@@ -45,14 +45,14 @@ export function createLogger(opts: CreateLoggerOptions): Logger {
     name: opts.name,
     level,
     base: { service: opts.name, env: process.env.NODE_ENV, ...(opts.base ?? {}) },
-    timestamp: stdTimeFunctions.isoTime,
+    timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: SENSITIVE_PATHS, censor: '[REDACTED]' },
     formatters: {
       level: (label) => ({ level: label }),
     },
     serializers: {
-      err: stdSerializers.err,
-      error: stdSerializers.err,
+      err: pino.stdSerializers.err,
+      error: pino.stdSerializers.err,
     },
   });
 }
