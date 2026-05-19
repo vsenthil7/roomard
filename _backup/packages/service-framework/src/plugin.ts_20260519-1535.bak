@@ -109,8 +109,8 @@ export function withPrincipalContext<T>(
       userId: principal.userId,
       actorKind: 'user',
       requestId: String(req.id),
-      ipInet: typeof req.ip === 'string' ? req.ip : undefined,
-      userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+      ip: typeof req.ip === 'string' ? req.ip : undefined,
+      userAgent: req.headers['user-agent'],
     },
     fn,
   );
