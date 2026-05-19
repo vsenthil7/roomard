@@ -11,7 +11,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
 FROM deps AS builder
-RUN pnpm --filter "@roomard/guest-svc..." build 2>/dev/null || pnpm --filter "@roomard/guest..." build
+RUN pnpm --filter "@roomard/guest-svc..." build
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
