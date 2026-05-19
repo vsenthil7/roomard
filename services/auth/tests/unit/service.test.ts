@@ -1,6 +1,6 @@
+import type { RoomardPool } from '@roomard/db';
 import bcryptjs from 'bcryptjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RoomardPool } from '@roomard/db';
 
 import { AuthService, authServiceConfigFromEnv } from '../../src/service.js';
 
@@ -156,5 +156,43 @@ describe('AuthService.passwordLogin', () => {
     await expect(svc.passwordLogin({ email: 'a@b.co', password: 'rightpw' })).rejects.toThrow(
       /not active/i,
     );
+  });
+});
+
+describe('authServiceConfigFromEnv — production hardening', () => {
+  const originalEnv = { ...process.env };
+  beforeEach(() => {
+    // Reset every env var this function reads so tests don't bleed into each other.
+    delete process.env.NODE_ENV;
+    delete process.env.JWT_SECRET;
+  });
+  // Restore originals after the suite to avoid affecting other test files.
+  // (vitest isolates test files by default, but explicit is safer.)
+  const _restore = (): void => {
+    process.env = { ...originalEnv };
+  };
+
+  it('returns dev default secret outside production when JWT_SECRET unset', () => {
+    process.env.NODE_ENV = 'development';
+    const cfg = authServiceConfigFromEnv();
+    expect(cfg.jwtSecret).toMatch(/test-only/);
+  });
+
+  it('throws when NODE_ENV=production and JWT_SECRET is unset', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => authServiceConfigFromEnv()).toThrow(/JWT_SECRET/);
+  });
+
+  it('throws when NODE_ENV=production and JWT_SECRET is the dev default', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'test-only-do-not-use-in-production-32bytes!';
+    expect(() => authServiceConfigFromEnv()).toThrow(/JWT_SECRET/);
+  });
+
+  it('accepts a real JWT_SECRET in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'a'.repeat(48); // any non-default value
+    const cfg = authServiceConfigFromEnv();
+    expect(cfg.jwtSecret).toHaveLength(48);
   });
 });

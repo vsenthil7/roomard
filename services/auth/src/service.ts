@@ -30,10 +30,28 @@ export interface AuthServiceConfig {
   lockoutDurationSeconds: number;
 }
 
+/**
+ * Default dev JWT secret. Never used in production: `authServiceConfigFromEnv`
+ * throws if NODE_ENV is 'production' and JWT_SECRET is unset, so this fallback
+ * can never reach prod. It exists only so local dev + unit tests don't need
+ * a `.env` file with a generated 32-byte key.
+ */
+const DEV_DEFAULT_JWT_SECRET = 'test-only-do-not-use-in-production-32bytes!';
+
 export function authServiceConfigFromEnv(): AuthServiceConfig {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const jwtSecretFromEnv = process.env.JWT_SECRET;
+  if (isProduction && (!jwtSecretFromEnv || jwtSecretFromEnv === DEV_DEFAULT_JWT_SECRET)) {
+    // Fail fast: starting auth-svc with a default or empty JWT secret in production
+    // is an unrecoverable security misconfiguration. Throwing here means the
+    // process exits at startup, not after the first request.
+    throw new Error(
+      'JWT_SECRET is not set or is the dev default — refusing to start in NODE_ENV=production. ' +
+        'Set JWT_SECRET to a >=32-byte cryptographically random value via your secrets manager.',
+    );
+  }
   return {
-    jwtSecret:
-      process.env.JWT_SECRET ?? 'test-only-do-not-use-in-production-32bytes!',
+    jwtSecret: jwtSecretFromEnv ?? DEV_DEFAULT_JWT_SECRET,
     issuer: process.env.JWT_ISSUER ?? 'roomard',
     audience: process.env.JWT_AUDIENCE ?? 'roomard',
     accessTokenTtlSeconds: Number.parseInt(process.env.ACCESS_TOKEN_TTL ?? '3600', 10),
