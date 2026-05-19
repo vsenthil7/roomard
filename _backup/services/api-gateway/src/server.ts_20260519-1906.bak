@@ -29,6 +29,7 @@ import {
 } from '@roomard/service-framework';
 import Fastify, { type FastifyRequest, type FastifyReply, type RouteHandlerMethod } from 'fastify';
 import { request as undiciRequest } from 'undici';
+import { z } from 'zod';
 
 import { matchRoute, upstreamsFromEnv, type Upstreams } from './routes.js';
 
@@ -87,10 +88,8 @@ export function buildServer(deps: BuildDeps) {
     const path = req.url.split('?')[0]!;
     const rule = matchRoute(method, path);
     if (!rule) {
-      // Use the typed error so the error envelope (request_id, category, status)
-      // is consistent with every other 404 in the system. Hand-crafted 404 bodies
-      // here would diverge from the rest of the API and break frontend error parsing.
-      throw new NotFoundError('route not found', { path, method });
+      reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'route not found' } });
+      return;
     }
 
     if (rule.requiredPermission !== 'public') {
