@@ -1,6 +1,7 @@
-import { request } from 'undici';
 import { IntegrationError, ServiceUnavailableError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
+import { request } from 'undici';
+
 import type { AiCallInput, AiCallResult, AiProvider, Capability } from './types.js';
 import { hashPayload } from './types.js';
 

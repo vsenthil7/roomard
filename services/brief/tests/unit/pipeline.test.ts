@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { generateBrief } from '../../src/pipeline.js';
 
 function fakeClient(handlers: Array<(sql: string, params: unknown[]) => { rows: unknown[] }>) {

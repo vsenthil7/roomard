@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { UuidSchema, IsoDateTimeSchema } from './common.js';
 
 export const ExceptionKindSchema = z.enum([

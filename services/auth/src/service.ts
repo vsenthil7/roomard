@@ -1,8 +1,6 @@
-import { compare } from 'bcryptjs';
-import { SignJWT } from 'jose';
-import { authenticator } from 'otplib';
 import { randomBytes, createHash } from 'node:crypto';
-import { RoomardPool } from '@roomard/db';
+
+import type { RoomardPool } from '@roomard/db';
 import {
   AuthenticationError,
   MfaRequiredError,
@@ -10,6 +8,9 @@ import {
   ConflictError,
 } from '@roomard/errors';
 import { rolesToPermissions } from '@roomard/service-framework';
+import { compare } from 'bcryptjs';
+import { SignJWT } from 'jose';
+import { authenticator } from 'otplib';
 
 export interface AuthServiceConfig {
   jwtSecret: string;

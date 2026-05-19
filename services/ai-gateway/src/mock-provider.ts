@@ -1,4 +1,5 @@
 import { ServiceUnavailableError } from '@roomard/errors';
+
 import type { AiCallInput, AiCallResult, AiProvider, Capability } from './types.js';
 import { hashPayload } from './types.js';
 

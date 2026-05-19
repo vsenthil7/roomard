@@ -7,10 +7,11 @@
  *   - With it set to tenant B, queries see only tenant-B rows
  *   - With it unset, RLS denies all reads on protected tables
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
-import { withTenantContext } from '../../src/tenant-context.js';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
 import { RoomardPool } from '../../src/pool.js';
+import { withTenantContext } from '../../src/tenant-context.js';
 
 const DEMO_TENANT_A = '00000000-0000-4000-8000-000000000001';
 const DEMO_TENANT_B = '00000000-0000-4000-8000-000000000002';

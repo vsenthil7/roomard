@@ -4,8 +4,10 @@
 import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useAuthStore } from '../stores/auth.js';
+
 import { apiFetch, ApiError } from '../lib/api.js';
+import { useAuthStore } from '../stores/auth.js';
+
 import { Route as RootRoute } from './__root.js';
 
 interface LoginForm {

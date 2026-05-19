@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { processCardCapture } from '../../src/pipeline.js';
+
 import { InMemoryObjectStore } from '../../src/object-store.js';
+import { processCardCapture } from '../../src/pipeline.js';
 
 function fakeClient(handlers: Array<(sql: string, params: unknown[]) => { rows: unknown[] }>) {
   let idx = 0;

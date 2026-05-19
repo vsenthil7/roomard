@@ -2,9 +2,11 @@
  * Guest detail — full profile, preferences, stay history, and "Say this" suggestion.
  * The Say This card is generated on demand via the AI gateway path.
  */
-import { createRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { createRoute, Link } from '@tanstack/react-router';
+
 import { apiFetch } from '../lib/api.js';
+
 import { Route as RootRoute } from './__root.js';
 
 export const Route = createRoute({

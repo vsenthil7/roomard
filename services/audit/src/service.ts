@@ -8,6 +8,7 @@
  * the same tenant. Verification re-hashes each row and asserts the chain.
  */
 import { createHash } from 'node:crypto';
+
 import type { PoolClient } from 'pg';
 
 export interface AuditRow {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { GuestRepo, buildSayThis } from '../../src/service.js';
 
 function fakeClient(handlers: Array<(sql: string, params: unknown[]) => { rows: unknown[] }>) {

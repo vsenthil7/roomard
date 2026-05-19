@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { buildServer } from '../../src/server.js';
 import { SignJWT } from 'jose';
+import { describe, it, expect, vi } from 'vitest';
+
+import { buildServer } from '../../src/server.js';
 
 describe('tenant-svc routes', () => {
   it('rejects unauthenticated request', async () => {

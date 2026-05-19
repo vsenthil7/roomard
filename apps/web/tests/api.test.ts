@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import { apiFetch, ApiError } from '../src/lib/api.js';
 import { useAuthStore } from '../src/stores/auth.js';
 

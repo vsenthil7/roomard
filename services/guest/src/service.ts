@@ -3,7 +3,6 @@
  * All queries run inside withTenantContext so RLS applies and the audit
  * trigger captures actor + request_id.
  */
-import type { PoolClient } from 'pg';
 import {
   ConflictError,
   NotFoundError,
@@ -17,6 +16,7 @@ import type {
   Preference,
   SayThisSuggestion,
 } from '@roomard/schemas';
+import type { PoolClient } from 'pg';
 
 interface GuestRow {
   id: string;

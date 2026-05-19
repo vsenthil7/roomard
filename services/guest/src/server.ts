@@ -1,6 +1,6 @@
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
-import { request as undiciRequest } from 'undici';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
+import { createLogger } from '@roomard/logger';
 import {
   GuestCreateRequestSchema,
   GuestPatchRequestSchema,
@@ -15,8 +15,10 @@ import {
   withPrincipalContext,
   reply,
 } from '@roomard/service-framework';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import { request as undiciRequest } from 'undici';
+
 import { GuestRepo, buildSayThis } from './service.js';
 
 const log = createLogger({ name: 'guest-svc' });

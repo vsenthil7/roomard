@@ -3,8 +3,8 @@
  * (S3-compatible) or AWS S3. The S3 SDK works for all three.
  */
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { createLogger } from '@roomard/logger';
 import { IntegrationError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 
 const log = createLogger({ name: 'capture.object-store' });
 

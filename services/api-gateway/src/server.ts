@@ -11,12 +11,9 @@
  * Internal services trust the inbound JWT (verified again with shared secret —
  * defence in depth) and read tenant/user/role from claims.
  */
-import Fastify, { type FastifyRequest, type FastifyReply, type RouteHandlerMethod } from 'fastify';
 import cors from '@fastify/cors';
-import sensible from '@fastify/sensible';
 import rateLimit from '@fastify/rate-limit';
-import { request as undiciRequest } from 'undici';
-import { z } from 'zod';
+import sensible from '@fastify/sensible';
 import {
   AuthenticationError,
   AuthorizationError,
@@ -24,12 +21,16 @@ import {
   isRoomardError,
   toSerializedError,
 } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 import {
   authConfigFromEnv,
   verifyAccessToken,
   hasPermission,
 } from '@roomard/service-framework';
-import { createLogger } from '@roomard/logger';
+import Fastify, { type FastifyRequest, type FastifyReply, type RouteHandlerMethod } from 'fastify';
+import { request as undiciRequest } from 'undici';
+import { z } from 'zod';
+
 import { matchRoute, upstreamsFromEnv, type Upstreams } from './routes.js';
 
 const log = createLogger({ name: 'api-gateway' });

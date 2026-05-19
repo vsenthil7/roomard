@@ -2,8 +2,10 @@
  * Tenant service — tenant + property + role management.
  * Routes are RBAC-gated; SSO config writes require MFA (enforced upstream by API Gateway).
  */
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
+import { NotFoundError, ValidationError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 import {
   PropertyCreateRequestSchema,
   UuidSchema,
@@ -16,9 +18,8 @@ import {
   withPrincipalContext,
   reply,
 } from '@roomard/service-framework';
-import { NotFoundError, ValidationError } from '@roomard/errors';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 const log = createLogger({ name: 'tenant-svc' });
 

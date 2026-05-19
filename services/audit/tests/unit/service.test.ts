@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { computeHash, verifyChain } from '../../src/service.js';
 import type { AuditRow } from '../../src/service.js';
 

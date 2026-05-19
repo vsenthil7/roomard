@@ -1,10 +1,12 @@
 /**
  * Guest list — search with debounce, paginate via cursor.
  */
-import { createRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { createRoute, Link } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
+
 import { apiFetch } from '../lib/api.js';
+
 import { Route as RootRoute } from './__root.js';
 
 export const Route = createRoute({

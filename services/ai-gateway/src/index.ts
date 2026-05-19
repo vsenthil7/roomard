@@ -1,12 +1,13 @@
 /**
  * Gateway facade — feature services depend on this, never on a concrete provider.
  */
-import { RoomardPool } from '@roomard/db';
+import type { RoomardPool } from '@roomard/db';
 import { RateLimitError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
-import type { AiCallInput, AiCallResult, AiProvider, Capability } from './types.js';
+
 import { MockAiProvider } from './mock-provider.js';
 import { QianfanProvider, qianfanConfigFromEnv } from './qianfan-provider.js';
+import type { AiCallInput, AiCallResult, AiProvider, Capability } from './types.js';
 
 export * from './types.js';
 export { MockAiProvider } from './mock-provider.js';

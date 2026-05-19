@@ -1,9 +1,11 @@
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
-import { z } from 'zod';
 import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
 import { toSerializedError, isRoomardError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+
 import { AiGateway, gatewayConfigFromEnv } from './index.js';
 
 const log = createLogger({ name: 'ai-gateway.http' });

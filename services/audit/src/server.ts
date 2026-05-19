@@ -1,5 +1,6 @@
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
+import { createLogger } from '@roomard/logger';
 import { AuditQuerySchema, AuditExportRequestSchema, UuidSchema } from '@roomard/schemas';
 import {
   applyFramework,
@@ -9,8 +10,9 @@ import {
   withPrincipalContext,
   reply,
 } from '@roomard/service-framework';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+
 import { queryEvents, verifyChain } from './service.js';
 
 const log = createLogger({ name: 'audit-svc' });

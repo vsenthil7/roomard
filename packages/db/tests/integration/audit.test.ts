@@ -6,10 +6,11 @@
  *   - UPDATE / DELETE on audit_events raises restrict_violation (append-only)
  *   - Sequential inserts chain previous_hash correctly
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
-import { withTenantContext } from '../../src/tenant-context.js';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
 import { RoomardPool } from '../../src/pool.js';
+import { withTenantContext } from '../../src/tenant-context.js';
 
 const TENANT = '00000000-0000-4000-8000-000000000001';
 

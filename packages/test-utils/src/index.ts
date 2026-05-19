@@ -7,8 +7,9 @@
  * - createFakeAiGateway: in-memory deterministic mock of the AI Gateway
  */
 import { randomUUID, createHash } from 'node:crypto';
-import { SignJWT, jwtVerify } from 'jose';
+
 import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
+import { SignJWT, jwtVerify } from 'jose';
 
 export const TEST_TENANT_ID = '00000000-0000-4000-8000-000000000001';
 export const TEST_PROPERTY_ID = '00000000-0000-4000-8000-000000000010';

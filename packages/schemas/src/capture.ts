@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { UuidSchema, IsoDateTimeSchema, ConfidenceSchema, EvidenceKindSchema } from './common.js';
 
 export const CaptureMetadataSchema = z.object({

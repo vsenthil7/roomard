@@ -2,10 +2,12 @@
  * Today's brief — UC-01. Front-desk lands here on sign-in.
  * Shows arrivals grouped by priority (VIP > Attention > Standard).
  */
-import { createRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { createRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+
 import { apiFetch } from '../lib/api.js';
+
 import { Route as RootRoute } from './__root.js';
 
 export const Route = createRoute({

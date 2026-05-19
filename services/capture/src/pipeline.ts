@@ -7,7 +7,6 @@
  *    link via preference_evidence, mark evidence accepted.
  * 5. If < 0.75 → write exception_queue_items row; evidence status=pending_review.
  */
-import type { PoolClient } from 'pg';
 import { NotFoundError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
 import type {
@@ -15,6 +14,8 @@ import type {
   CaptureResponse,
   CaptureMetadata,
 } from '@roomard/schemas';
+import type { PoolClient } from 'pg';
+
 import type { AnyObjectStore } from './object-store.js';
 
 const log = createLogger({ name: 'capture.pipeline' });

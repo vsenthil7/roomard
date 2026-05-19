@@ -19,9 +19,9 @@
  *     return result.rows;
  *   });
  */
+import { DatabaseError } from '@roomard/errors';
 import type { PoolClient } from 'pg';
 
-import { DatabaseError } from '@roomard/errors';
 
 import type { RoomardPool } from './pool.js';
 

@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
+
+import { describe, it, expect, vi } from 'vitest';
+
 import { verifyMewsSignature, ingestMewsReservation } from '../../src/server.js';
 
 describe('verifyMewsSignature', () => {

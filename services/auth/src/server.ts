@@ -1,5 +1,6 @@
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
+import { createLogger } from '@roomard/logger';
 import {
   PasswordLoginRequestSchema,
   MfaVerifyRequestSchema,
@@ -9,8 +10,9 @@ import {
   type MeResponse,
 } from '@roomard/schemas';
 import { applyFramework, authConfigFromEnv, requirePrincipal, reply } from '@roomard/service-framework';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+
 import { AuthService, authServiceConfigFromEnv } from './service.js';
 
 const log = createLogger({ name: 'auth-svc' });

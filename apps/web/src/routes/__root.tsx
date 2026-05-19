@@ -3,8 +3,9 @@
  * for nested routes. Redirects to /login if not authenticated.
  */
 import { createRootRoute, Outlet, Link, useNavigate, redirect } from '@tanstack/react-router';
-import { useAuthStore } from '../stores/auth.js';
 import { useEffect } from 'react';
+
+import { useAuthStore } from '../stores/auth.js';
 
 export const Route = createRootRoute({
   component: RootLayout,

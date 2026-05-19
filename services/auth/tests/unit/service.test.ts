@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { hash } from 'bcryptjs';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { AuthService, authServiceConfigFromEnv } from '../../src/service.js';
 
 interface FakeRow {

@@ -17,10 +17,10 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import pg from 'pg';
 
 import { DatabaseError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
+import pg from 'pg';
 
 const { Client } = pg;
 const log = createLogger({ name: 'db.migrate' });

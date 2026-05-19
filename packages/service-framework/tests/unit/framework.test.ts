@@ -1,5 +1,6 @@
+import { SignJWT } from 'jose';
 import { describe, it, expect } from 'vitest';
-import { snakeToCamel, camelToSnake } from '../../src/plugin.js';
+
 import {
   rolesToPermissions,
   hasPermission,
@@ -7,7 +8,7 @@ import {
   verifyAccessToken,
   authConfigFromEnv,
 } from '../../src/auth.js';
-import { SignJWT } from 'jose';
+import { snakeToCamel, camelToSnake } from '../../src/plugin.js';
 
 describe('case translation', () => {
   it('translates flat snake to camel', () => {

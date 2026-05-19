@@ -13,9 +13,9 @@
  * Idempotency: uses ON CONFLICT (tenant_id, property_id, brief_date) — re-running
  * with `force=true` regenerates; otherwise returns existing.
  */
-import type { PoolClient } from 'pg';
 import { ConflictError, NotFoundError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
+import type { PoolClient } from 'pg';
 
 const log = createLogger({ name: 'brief.pipeline' });
 

@@ -1,6 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ZodError } from 'zod';
-import { createLogger } from '@roomard/logger';
+import { withTenantContext } from '@roomard/db';
 import {
   AuthenticationError,
   AuthorizationError,
@@ -8,7 +6,10 @@ import {
   isRoomardError,
   toSerializedError,
 } from '@roomard/errors';
-import { withTenantContext } from '@roomard/db';
+import { createLogger } from '@roomard/logger';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { ZodError } from 'zod';
+
 import { type AuthPrincipal, type AuthConfig, verifyAccessToken } from './auth.js';
 
 declare module 'fastify' {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { useAuthStore } from '../src/stores/auth.js';
 
 describe('useAuthStore', () => {

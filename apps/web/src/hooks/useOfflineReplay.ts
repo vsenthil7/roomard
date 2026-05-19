@@ -3,8 +3,9 @@
  * captures sequentially. Limits to 5 attempts per item; logs failures.
  */
 import { useEffect } from 'react';
-import { listQueuedCaptures, markCaptureFailure, removeCapture } from '../lib/offline-queue.js';
+
 import { apiFetch } from '../lib/api.js';
+import { listQueuedCaptures, markCaptureFailure, removeCapture } from '../lib/offline-queue.js';
 
 const MAX_ATTEMPTS = 5;
 

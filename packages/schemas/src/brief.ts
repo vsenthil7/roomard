@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { UuidSchema, IsoDateTimeSchema, ConfidenceSchema } from './common.js';
 
 export const BriefStatusSchema = z.enum(['draft', 'generating', 'ready', 'delivered', 'failed']);

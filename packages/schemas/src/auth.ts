@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { EmailSchema, UuidSchema, IsoDateTimeSchema } from './common.js';
 
 export const SsoStartRequestSchema = z.object({

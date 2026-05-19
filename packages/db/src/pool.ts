@@ -9,11 +9,11 @@
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
+import { DatabaseError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 import type { PoolClient, PoolConfig, QueryResult, QueryResultRow } from 'pg';
 import pg from 'pg';
 
-import { DatabaseError } from '@roomard/errors';
-import { createLogger } from '@roomard/logger';
 
 const { Pool } = pg;
 

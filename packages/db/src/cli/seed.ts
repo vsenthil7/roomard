@@ -12,9 +12,9 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { createLogger } from '@roomard/logger';
 import bcrypt from 'bcryptjs';
 
-import { createLogger } from '@roomard/logger';
 
 import { createPool, dbConfigFromEnv } from '../pool.js';
 

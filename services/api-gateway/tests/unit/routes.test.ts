@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { matchRoute, ROUTES } from '../../src/routes.js';
 
 describe('matchRoute', () => {

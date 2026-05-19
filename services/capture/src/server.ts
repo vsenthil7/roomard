@@ -1,8 +1,8 @@
-import Fastify, { FastifyInstance } from 'fastify';
-import sensible from '@fastify/sensible';
 import multipart from '@fastify/multipart';
-import { request as undiciRequest } from 'undici';
+import sensible from '@fastify/sensible';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
 import { ValidationError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 import {
   CardCaptureRequestSchema,
   CaptureMetadataSchema,
@@ -16,14 +16,16 @@ import {
   withPrincipalContext,
   reply,
 } from '@roomard/service-framework';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
-import { processCardCapture } from './pipeline.js';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import { request as undiciRequest } from 'undici';
+
 import {
   ObjectStore,
   objectStoreConfigFromEnv,
   type AnyObjectStore,
 } from './object-store.js';
+import { processCardCapture } from './pipeline.js';
 
 const log = createLogger({ name: 'capture-svc' });
 

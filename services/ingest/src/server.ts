@@ -6,13 +6,15 @@
  * - Stub pollers for TripAdvisor / Booking.com / Google. Behind feature flag for MVP.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { PoolClient } from 'pg';
-import Fastify, { FastifyInstance } from 'fastify';
+
 import sensible from '@fastify/sensible';
-import { z } from 'zod';
-import { AuthenticationError, IntegrationError, NotFoundError } from '@roomard/errors';
 import { RoomardPool, dbConfigFromEnv, withTenantContext } from '@roomard/db';
+import { AuthenticationError, IntegrationError, NotFoundError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import type { PoolClient } from 'pg';
+import { z } from 'zod';
 
 const log = createLogger({ name: 'ingest-svc' });
 

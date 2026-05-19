@@ -1,4 +1,9 @@
 import { describe, it, expect } from 'vitest';
+
+import { AuditExportRequestSchema } from '../../src/audit.js';
+import { PasswordLoginRequestSchema, LoginResponseSchema, TokenPairSchema } from '../../src/auth.js';
+import { BriefGenerateRequestSchema, BriefItemPrioritySchema } from '../../src/brief.js';
+import { CardCaptureRequestSchema, OcrResultSchema } from '../../src/capture.js';
 import {
   UuidSchema,
   EmailSchema,
@@ -8,14 +13,10 @@ import {
   IsoDateTimeSchema,
   IsoDateSchema,
 } from '../../src/common.js';
-import { GuestCreateRequestSchema, PreferenceSchema } from '../../src/guest.js';
-import { CardCaptureRequestSchema, OcrResultSchema } from '../../src/capture.js';
-import { BriefGenerateRequestSchema, BriefItemPrioritySchema } from '../../src/brief.js';
 import { ExceptionPatchRequestSchema, ExceptionKindSchema } from '../../src/exception.js';
+import { GuestCreateRequestSchema, PreferenceSchema } from '../../src/guest.js';
 import { ReviewLinkRequestSchema } from '../../src/review.js';
 import { PropertyCreateRequestSchema, TenantTierSchema } from '../../src/tenant.js';
-import { AuditExportRequestSchema } from '../../src/audit.js';
-import { PasswordLoginRequestSchema, LoginResponseSchema, TokenPairSchema } from '../../src/auth.js';
 
 describe('common schemas', () => {
   it('accepts a valid UUID', () => {

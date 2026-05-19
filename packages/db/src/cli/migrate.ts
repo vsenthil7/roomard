@@ -6,8 +6,8 @@
  *   tsx src/cli/migrate.ts down [n]   # roll back n migrations (default 1)
  *   tsx src/cli/migrate.ts reset      # destructive reset (local/test only)
  */
-import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { createLogger } from '@roomard/logger';
 

@@ -1,5 +1,5 @@
-import { jwtVerify } from 'jose';
 import { AuthenticationError, AuthorizationError } from '@roomard/errors';
+import { jwtVerify } from 'jose';
 
 export interface AuthPrincipal {
   userId: string;

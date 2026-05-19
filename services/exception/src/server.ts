@@ -2,11 +2,10 @@
  * Exception queue — review, assign, resolve items routed here from upstream
  * pipelines (capture low-confidence, identity merge candidates, PMS sync failures, etc.).
  */
-import type { PoolClient } from 'pg';
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
-import { z } from 'zod';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
 import { NotFoundError, ValidationError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 import {
   ExceptionPatchRequestSchema,
   ExceptionKindSchema,
@@ -21,8 +20,10 @@ import {
   withPrincipalContext,
   reply,
 } from '@roomard/service-framework';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import type { PoolClient } from 'pg';
+import { z } from 'zod';
 
 const log = createLogger({ name: 'exception-svc' });
 

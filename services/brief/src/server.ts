@@ -1,6 +1,7 @@
-import Fastify, { FastifyInstance } from 'fastify';
 import sensible from '@fastify/sensible';
-import { request as undiciRequest } from 'undici';
+import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
+import { NotFoundError } from '@roomard/errors';
+import { createLogger } from '@roomard/logger';
 import {
   BriefGenerateRequestSchema,
   UuidSchema,
@@ -13,9 +14,10 @@ import {
   withPrincipalContext,
   reply,
 } from '@roomard/service-framework';
-import { NotFoundError } from '@roomard/errors';
-import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { createLogger } from '@roomard/logger';
+import Fastify from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import { request as undiciRequest } from 'undici';
+
 import { generateBrief, loadBriefById } from './pipeline.js';
 
 const log = createLogger({ name: 'brief-svc' });
