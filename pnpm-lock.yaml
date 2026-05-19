@@ -703,6 +703,9 @@ importers:
       pg:
         specifier: ^8.13.0
         version: 8.21.0
+      undici:
+        specifier: ^6.20.0
+        version: 6.25.0
       zod:
         specifier: ^3.23.8
         version: 3.25.76
