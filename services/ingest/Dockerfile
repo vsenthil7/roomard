@@ -1,5 +1,10 @@
 # Multi-stage Dockerfile for the ingest service.
-# Inherits the shared service build pattern.
+# Uses pnpm deploy to produce a self-contained runtime bundle that includes
+# all prod deps (direct + transitive workspace-package deps). The older
+# `pnpm install --prod --filter` pattern silently dropped transitive deps
+# coming through workspace packages, leaving services unable to resolve
+# `pg`/`jose` at runtime even though they were declared in @roomard/db /
+# @roomard/service-framework. See G-21/G-22.
 
 FROM node:20-alpine AS deps
 RUN corepack enable
@@ -12,17 +17,18 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 FROM deps AS builder
 RUN pnpm --filter "@roomard/ingest-svc..." build
+# Produce a self-contained deploy bundle at /deploy with the service's compiled
+# code + its complete prod dependency closure. node_modules inside the bundle
+# resolves cleanly under Node's ESM loader without phantom-dep surprises.
+RUN pnpm --filter @roomard/ingest-svc deploy --prod /deploy
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
-RUN corepack enable && addgroup -S roomard && adduser -S -G roomard roomard
+RUN addgroup -S roomard && adduser -S -G roomard roomard
 WORKDIR /app
-COPY --from=builder --chown=roomard:roomard /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=builder --chown=roomard:roomard /app/packages ./packages
-COPY --from=builder --chown=roomard:roomard /app/services/ingest ./services/ingest
-RUN pnpm install --frozen-lockfile --prod --filter "./services/ingest..."
+COPY --from=builder --chown=roomard:roomard /deploy ./
 USER roomard
 EXPOSE 3009
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
   CMD wget -q -O- "http://127.0.0.1:${INGEST_PORT:-3009}/health" || exit 1
-CMD ["node", "services/ingest/dist/server.js"]
+CMD ["node", "dist/server.js"]

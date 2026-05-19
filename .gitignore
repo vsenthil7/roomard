@@ -51,3 +51,4 @@ secrets/
 # Local artefacts
 tmp/
 .cache/
+_session/
