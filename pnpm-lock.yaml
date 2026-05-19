@@ -820,6 +820,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.2
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.19)(happy-dom@15.11.7)(terser@5.47.1))
+      jose:
+        specifier: ^5.9.4
+        version: 5.10.0
       tsx:
         specifier: ^4.19.1
         version: 4.22.2
