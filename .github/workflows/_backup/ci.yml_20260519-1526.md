@@ -23,7 +23,6 @@ jobs:
           node-version: 20.10.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
       - run: pnpm run typecheck
       - run: pnpm run lint
 
@@ -39,7 +38,6 @@ jobs:
           node-version: 20.10.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
       - run: pnpm -r --filter "@roomard/*" run test:coverage
       - name: Enforce coverage gate
         run: |

@@ -1,5 +1,5 @@
 {
-  "name": "@roomard/errors",
+  "name": "@roomard/logger",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,13 @@
   "scripts": {
     "build": "tsc -b",
     "dev": "tsc -b --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "pino": "^9.4.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.0",
