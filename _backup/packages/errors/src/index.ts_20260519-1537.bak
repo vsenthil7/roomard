@@ -201,25 +201,8 @@ export class IntegrationError extends RoomardError {
 }
 
 export class ServiceUnavailableError extends RoomardError {
-  /** Flexible signature: (message), (message, details), (code, message), (code, message, details). */
-  constructor(
-    codeOrMessage: string = 'service_unavailable',
-    messageOrDetails: string | ErrorDetail[] | Record<string, unknown> = 'Service temporarily unavailable',
-    details?: ErrorDetail[] | Record<string, unknown>,
-  ) {
-    if (typeof messageOrDetails === 'string') {
-      super(codeOrMessage, messageOrDetails, {
-        category: 'unavailable',
-        status: 503,
-        details: normaliseDetails(details),
-      });
-    } else {
-      super('service_unavailable', codeOrMessage, {
-        category: 'unavailable',
-        status: 503,
-        details: normaliseDetails(messageOrDetails),
-      });
-    }
+  constructor(message = 'Service temporarily unavailable') {
+    super('service_unavailable', message, { category: 'unavailable', status: 503 });
   }
 }
 
