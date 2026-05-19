@@ -1,8 +1,63 @@
 # Roomard local development environment.
-# Spin up with: docker compose up -d
-# Tear down with: docker compose down -v
+#
+# Spin up: docker compose up -d --build
+# Tear down: docker compose down -v
+# Logs: docker compose logs -f api-gateway auth tenant
+#
+# Port assignments use a Roomard-specific range to avoid clashes with
+# sibling project stacks (e.g. MendoraCI also uses 3000/5432/6379/9000/9001).
+# Container-internal ports stay at the code's defaults so no source changes
+# are needed when the same binary runs in CI or staging.
+#
+#   service        container   host
+#   ------------   ---------   ----
+#   api-gateway    3000        3100   <- public entry for the SPA's /api/* proxy
+#   auth           3001        3101
+#   tenant         3002        3102
+#   guest          3003        3103
+#   capture        3004        3104
+#   brief          3005        3105
+#   exception      3006        3106
+#   audit          3007        3107
+#   ai-gateway     3008        3108
+#   ingest         3009        3109
+#   web (nginx)    8080        8180   <- open this in the browser
+#   postgres       5432        5532
+#   redis          6379        6479
+#   minio S3       9000        9100
+#   minio console  9001        9101
+#   mailpit SMTP   1025        1125
+#   mailpit UI     8025        8125
+#
+# Secrets in this file are DEV-ONLY. Real deployments use external secret
+# managers; never copy these values verbatim to staging or production.
+
+x-env-jwt: &env-jwt
+  JWT_SECRET: "dev-only-32byte-key-not-for-production-use!!"
+  JWT_ISSUER: "roomard"
+  JWT_AUDIENCE: "roomard"
+
+x-env-db: &env-db
+  DATABASE_URL: "postgres://roomard:roomard_dev_pwd@postgres:5432/roomard"
+  DATABASE_POOL_MAX: "10"
+  DATABASE_POOL_MIN: "2"
+  DATABASE_STATEMENT_TIMEOUT_MS: "30000"
+
+x-env-log: &env-log
+  NODE_ENV: "development"
+  LOG_LEVEL: "info"
+
+# Shared depends_on bundle for services that need the data plane up first.
+x-depends-data: &depends-data
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
 
 services:
+  # ---------------------------------------------------------------------------
+  # Data plane
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
     container_name: roomard-postgres
@@ -11,7 +66,6 @@ services:
       POSTGRES_USER: roomard
       POSTGRES_PASSWORD: roomard_dev_pwd
       POSTGRES_DB: roomard
-      # Enables pg_stat_statements + uuid-ossp via shared_preload_libraries below.
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
     command:
       - "postgres"
@@ -22,7 +76,7 @@ services:
       - "-c"
       - "max_connections=200"
     ports:
-      - "5432:5432"
+      - "5532:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./packages/db/init:/docker-entrypoint-initdb.d:ro
@@ -46,7 +100,7 @@ services:
       - "--maxmemory-policy"
       - "allkeys-lru"
     ports:
-      - "6379:6379"
+      - "6479:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -56,7 +110,6 @@ services:
       retries: 10
 
   minio:
-    # S3-compatible object store for local dev (replaces Baidu BOS / AWS S3).
     image: minio/minio:latest
     container_name: roomard-minio
     restart: unless-stopped
@@ -65,8 +118,8 @@ services:
       MINIO_ROOT_USER: roomard_minio
       MINIO_ROOT_PASSWORD: roomard_minio_dev_pwd
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9100:9000"
+      - "9101:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -76,7 +129,6 @@ services:
       retries: 10
 
   minio-init:
-    # Creates the default bucket for evidence storage on startup.
     image: minio/mc:latest
     depends_on:
       minio:
@@ -93,18 +145,268 @@ services:
         echo "MinIO buckets ready"
 
   mailpit:
-    # Local SMTP capture for outbound email tests.
     image: axllent/mailpit:latest
     container_name: roomard-mailpit
     restart: unless-stopped
     ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # Web UI
+      - "1125:1025"
+      - "8125:8025"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Application services
+  #
+  # Build context is the repo root so each Dockerfile can COPY the whole
+  # workspace (packages/, services/) it needs for the pnpm-monorepo build.
+  # Image tags are pinned to roomard/<svc>:dev for easy local identification.
+  # ---------------------------------------------------------------------------
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    image: roomard/api-gateway:dev
+    container_name: roomard-api-gateway
+    restart: unless-stopped
+    depends_on:
+      <<: *depends-data
+      auth:
+        condition: service_started
+      tenant:
+        condition: service_started
+      guest:
+        condition: service_started
+      capture:
+        condition: service_started
+      brief:
+        condition: service_started
+      exception:
+        condition: service_started
+      audit:
+        condition: service_started
+      ingest:
+        condition: service_started
+    environment:
+      <<: [*env-log, *env-jwt]
+      APP_NAME: "api-gateway"
+      API_GATEWAY_PORT: "3000"
+      PORT: "3000"
+      # Origins that the SPA may legitimately call from.
+      # 8180 is the host-mapped nginx; 5173 is the vite dev server; web:8080 is
+      # the in-network nginx hostname (useful for headless tests).
+      CORS_ORIGINS: "http://localhost:8180,http://localhost:5173,http://web:8080"
+      RATE_LIMIT_MAX: "300"
+      RATE_LIMIT_WINDOW_MS: "60000"
+      REDIS_URL: "redis://redis:6379"
+      # Upstream routing — container hostnames resolved by the compose network.
+      AUTH_URL: "http://auth:3001"
+      TENANT_URL: "http://tenant:3002"
+      GUEST_URL: "http://guest:3003"
+      CAPTURE_URL: "http://capture:3004"
+      BRIEF_URL: "http://brief:3005"
+      EXCEPTION_URL: "http://exception:3006"
+      AUDIT_URL: "http://audit:3007"
+      INGEST_URL: "http://ingest:3009"
+    ports:
+      - "3100:3000"
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    image: roomard/auth-svc:dev
+    container_name: roomard-auth-svc
+    restart: unless-stopped
+    depends_on: *depends-data
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "auth-svc"
+      AUTH_PORT: "3001"
+      PORT: "3001"
+      ACCESS_TOKEN_TTL: "3600"
+      REFRESH_TOKEN_TTL: "86400"
+      MAX_FAILED_LOGINS: "5"
+      LOCKOUT_DURATION: "900"
+    ports:
+      - "3101:3001"
+
+  tenant:
+    build:
+      context: .
+      dockerfile: services/tenant/Dockerfile
+    image: roomard/tenant-svc:dev
+    container_name: roomard-tenant-svc
+    restart: unless-stopped
+    depends_on: *depends-data
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "tenant-svc"
+      TENANT_PORT: "3002"
+      PORT: "3002"
+    ports:
+      - "3102:3002"
+
+  guest:
+    build:
+      context: .
+      dockerfile: services/guest/Dockerfile
+    image: roomard/guest-svc:dev
+    container_name: roomard-guest-svc
+    restart: unless-stopped
+    depends_on:
+      <<: *depends-data
+      ai-gateway:
+        condition: service_started
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "guest-svc"
+      GUEST_PORT: "3003"
+      PORT: "3003"
+      AI_GATEWAY_URL: "http://ai-gateway:3008"
+    ports:
+      - "3103:3003"
+
+  capture:
+    build:
+      context: .
+      dockerfile: services/capture/Dockerfile
+    image: roomard/capture-svc:dev
+    container_name: roomard-capture-svc
+    restart: unless-stopped
+    depends_on:
+      <<: *depends-data
+      minio:
+        condition: service_healthy
+      ai-gateway:
+        condition: service_started
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "capture-svc"
+      CAPTURE_PORT: "3004"
+      PORT: "3004"
+      AI_GATEWAY_URL: "http://ai-gateway:3008"
+      # S3-compatible object store for capture evidence.
+      S3_ENDPOINT: "http://minio:9000"
+      S3_REGION: "us-east-1"
+      S3_ACCESS_KEY: "roomard_minio"
+      S3_SECRET_KEY: "roomard_minio_dev_pwd"
+      S3_BUCKET_EVIDENCE: "roomard-evidence"
+      S3_FORCE_PATH_STYLE: "true"
+    ports:
+      - "3104:3004"
+
+  brief:
+    build:
+      context: .
+      dockerfile: services/brief/Dockerfile
+    image: roomard/brief-svc:dev
+    container_name: roomard-brief-svc
+    restart: unless-stopped
+    depends_on:
+      <<: *depends-data
+      ai-gateway:
+        condition: service_started
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "brief-svc"
+      BRIEF_PORT: "3005"
+      PORT: "3005"
+      AI_GATEWAY_URL: "http://ai-gateway:3008"
+    ports:
+      - "3105:3005"
+
+  exception:
+    build:
+      context: .
+      dockerfile: services/exception/Dockerfile
+    image: roomard/exception-svc:dev
+    container_name: roomard-exception-svc
+    restart: unless-stopped
+    depends_on: *depends-data
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "exception-svc"
+      EXCEPTION_PORT: "3006"
+      PORT: "3006"
+    ports:
+      - "3106:3006"
+
+  audit:
+    build:
+      context: .
+      dockerfile: services/audit/Dockerfile
+    image: roomard/audit-svc:dev
+    container_name: roomard-audit-svc
+    restart: unless-stopped
+    depends_on: *depends-data
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "audit-svc"
+      AUDIT_PORT: "3007"
+      PORT: "3007"
+    ports:
+      - "3107:3007"
+
+  ai-gateway:
+    build:
+      context: .
+      dockerfile: services/ai-gateway/Dockerfile
+    image: roomard/ai-gateway:dev
+    container_name: roomard-ai-gateway
+    restart: unless-stopped
+    # ai-gateway does not need postgres; it brokers Qianfan/MaaS calls only.
+    environment:
+      <<: [*env-log, *env-jwt]
+      APP_NAME: "ai-gateway"
+      AI_GATEWAY_PORT: "3008"
+      PORT: "3008"
+      # Provider selection. 'mock' is the default for local; 'qianfan' requires
+      # QIANFAN_AK / QIANFAN_SK and runs against the real Baidu endpoint.
+      AI_PROVIDER: "mock"
+      # QIANFAN_AK: ""
+      # QIANFAN_SK: ""
+    ports:
+      - "3108:3008"
+
+  ingest:
+    build:
+      context: .
+      dockerfile: services/ingest/Dockerfile
+    image: roomard/ingest-svc:dev
+    container_name: roomard-ingest-svc
+    restart: unless-stopped
+    depends_on: *depends-data
+    environment:
+      <<: [*env-log, *env-jwt, *env-db]
+      APP_NAME: "ingest-svc"
+      INGEST_PORT: "3009"
+      PORT: "3009"
+      # Webhook secret resolution falls back to env when the integrations table
+      # has no row for the tenant. MEWS_WEBHOOK_SECRET is the dev default.
+      MEWS_WEBHOOK_SECRET: "dev-only-mews-hmac-secret"
+    ports:
+      - "3109:3009"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Vite bakes the API base into the bundle at build time. Same-origin
+        # /api gets rewritten by nginx to the api-gateway upstream.
+        VITE_API_BASE: "/api"
+    image: roomard/web:dev
+    container_name: roomard-web
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "8180:8080"
 
 volumes:
   postgres_data:
