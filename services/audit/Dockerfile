@@ -22,7 +22,7 @@ COPY --from=builder --chown=roomard:roomard /app/packages ./packages
 COPY --from=builder --chown=roomard:roomard /app/services/audit ./services/audit
 RUN pnpm install --frozen-lockfile --prod --filter "./services/audit..."
 USER roomard
-EXPOSE 3000
+EXPOSE 3007
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+  CMD wget -q -O- "http://localhost:${AUDIT_PORT:-3007}/health" || exit 1
 CMD ["node", "services/audit/dist/server.js"]

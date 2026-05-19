@@ -22,7 +22,7 @@ COPY --from=builder --chown=roomard:roomard /app/packages ./packages
 COPY --from=builder --chown=roomard:roomard /app/services/ingest ./services/ingest
 RUN pnpm install --frozen-lockfile --prod --filter "./services/ingest..."
 USER roomard
-EXPOSE 3000
+EXPOSE 3009
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+  CMD wget -q -O- "http://localhost:${INGEST_PORT:-3009}/health" || exit 1
 CMD ["node", "services/ingest/dist/server.js"]

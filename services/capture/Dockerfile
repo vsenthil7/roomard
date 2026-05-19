@@ -22,7 +22,7 @@ COPY --from=builder --chown=roomard:roomard /app/packages ./packages
 COPY --from=builder --chown=roomard:roomard /app/services/capture ./services/capture
 RUN pnpm install --frozen-lockfile --prod --filter "./services/capture..."
 USER roomard
-EXPOSE 3000
+EXPOSE 3004
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+  CMD wget -q -O- "http://localhost:${CAPTURE_PORT:-3004}/health" || exit 1
 CMD ["node", "services/capture/dist/server.js"]

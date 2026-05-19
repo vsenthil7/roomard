@@ -22,7 +22,7 @@ COPY --from=builder --chown=roomard:roomard /app/packages ./packages
 COPY --from=builder --chown=roomard:roomard /app/services/exception ./services/exception
 RUN pnpm install --frozen-lockfile --prod --filter "./services/exception..."
 USER roomard
-EXPOSE 3000
+EXPOSE 3006
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+  CMD wget -q -O- "http://localhost:${EXCEPTION_PORT:-3006}/health" || exit 1
 CMD ["node", "services/exception/dist/server.js"]

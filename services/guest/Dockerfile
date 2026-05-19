@@ -22,7 +22,7 @@ COPY --from=builder --chown=roomard:roomard /app/packages ./packages
 COPY --from=builder --chown=roomard:roomard /app/services/guest ./services/guest
 RUN pnpm install --frozen-lockfile --prod --filter "./services/guest..."
 USER roomard
-EXPOSE 3000
+EXPOSE 3003
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+  CMD wget -q -O- "http://localhost:${GUEST_PORT:-3003}/health" || exit 1
 CMD ["node", "services/guest/dist/server.js"]

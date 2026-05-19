@@ -22,7 +22,7 @@ COPY --from=builder --chown=roomard:roomard /app/packages ./packages
 COPY --from=builder --chown=roomard:roomard /app/services/tenant ./services/tenant
 RUN pnpm install --frozen-lockfile --prod --filter "./services/tenant..."
 USER roomard
-EXPOSE 3000
+EXPOSE 3002
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${PORT:-3000}/health" || exit 1
+  CMD wget -q -O- "http://localhost:${TENANT_PORT:-3002}/health" || exit 1
 CMD ["node", "services/tenant/dist/server.js"]
