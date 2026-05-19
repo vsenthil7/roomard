@@ -1,11 +1,8 @@
-import bcryptjs from 'bcryptjs';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RoomardPool } from '@roomard/db';
+import { hash } from 'bcryptjs';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { AuthService, authServiceConfigFromEnv } from '../../src/service.js';
-
-// bcryptjs is CommonJS — default-import + destructure for runtime ESM safety.
-const { hash } = bcryptjs;
 
 interface FakeRow {
   rows: unknown[];

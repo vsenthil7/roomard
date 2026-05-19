@@ -8,17 +8,10 @@ import {
   ConflictError,
 } from '@roomard/errors';
 import { rolesToPermissions } from '@roomard/service-framework';
-// bcryptjs is a CommonJS module without proper named-export ESM interop.
-// Default import + destructure is the only pattern that works under Node
-// 20's native ESM loader. Named imports (`import { compare } from 'bcryptjs'`)
-// look fine in TypeScript and pass in vitest (esbuild interop), but crash
-// at runtime with "Named export 'compare' not found".
-import bcryptjs from 'bcryptjs';
+import { compare } from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { authenticator } from 'otplib';
 import type { PoolClient } from 'pg';
-
-const { compare } = bcryptjs;
 
 export interface AuthServiceConfig {
   jwtSecret: string;
