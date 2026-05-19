@@ -24,5 +24,5 @@ RUN pnpm install --frozen-lockfile --prod --filter "./services/brief..."
 USER roomard
 EXPOSE 3005
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${BRIEF_PORT:-3005}/health" || exit 1
+  CMD wget -q -O- "http://127.0.0.1:${BRIEF_PORT:-3005}/health" || exit 1
 CMD ["node", "services/brief/dist/server.js"]

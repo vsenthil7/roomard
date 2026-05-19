@@ -24,5 +24,5 @@ RUN pnpm install --frozen-lockfile --prod --filter "./services/guest..."
 USER roomard
 EXPOSE 3003
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${GUEST_PORT:-3003}/health" || exit 1
+  CMD wget -q -O- "http://127.0.0.1:${GUEST_PORT:-3003}/health" || exit 1
 CMD ["node", "services/guest/dist/server.js"]

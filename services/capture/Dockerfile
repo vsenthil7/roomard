@@ -24,5 +24,5 @@ RUN pnpm install --frozen-lockfile --prod --filter "./services/capture..."
 USER roomard
 EXPOSE 3004
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${CAPTURE_PORT:-3004}/health" || exit 1
+  CMD wget -q -O- "http://127.0.0.1:${CAPTURE_PORT:-3004}/health" || exit 1
 CMD ["node", "services/capture/dist/server.js"]

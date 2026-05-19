@@ -24,5 +24,5 @@ RUN pnpm install --frozen-lockfile --prod --filter "./services/exception..."
 USER roomard
 EXPOSE 3006
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${EXCEPTION_PORT:-3006}/health" || exit 1
+  CMD wget -q -O- "http://127.0.0.1:${EXCEPTION_PORT:-3006}/health" || exit 1
 CMD ["node", "services/exception/dist/server.js"]

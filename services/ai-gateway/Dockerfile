@@ -24,5 +24,5 @@ RUN pnpm install --frozen-lockfile --prod --filter "./services/ai-gateway..."
 USER roomard
 EXPOSE 3008
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget -q -O- "http://localhost:${AI_GATEWAY_PORT:-3008}/health" || exit 1
+  CMD wget -q -O- "http://127.0.0.1:${AI_GATEWAY_PORT:-3008}/health" || exit 1
 CMD ["node", "services/ai-gateway/dist/server.js"]
