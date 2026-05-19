@@ -33,13 +33,6 @@ export interface TenantContext {
   /** Acting user UUID. Omit for system-initiated work; set actorKind to 'system'. */
   userId?: string | null;
   actorKind?: ActorKind;
-  /**
-   * Human-readable label for non-user actors. Examples: 'mews-webhook',
-   * 'ai-brief-job', 'cron-poller'. Not currently persisted to GUC (no DB column yet);
-   * carried for logging/metrics today, audit table will pick it up in a future
-   * migration that adds an `actor_label` column on `audit_events`.
-   */
-  actorLabel?: string;
   requestId?: string | null;
   ipInet?: string | null;
   userAgent?: string | null;

@@ -177,7 +177,7 @@ export function buildServer(deps: IngestDeps): FastifyInstance {
       },
       (client) => ingestMewsReservation(client, tenantId, parsed),
     );
-    reply.code(200).send({ status: 'accepted', ...result });
+    reply.code(200).send({ ingestStatus: 'accepted', ...result });
   });
 
   return app;
