@@ -1,4 +1,3 @@
-import type { PoolClient } from 'pg';
 import { describe, it, expect, vi } from 'vitest';
 
 import { generateBrief } from '../../src/pipeline.js';
@@ -13,7 +12,7 @@ function fakeClient(handlers: Array<(sql: string, params: unknown[]) => { rows: 
       return h(sql, params);
     }),
     release: vi.fn(),
-  } as unknown as PoolClient;
+  } as unknown as import('pg').PoolClient;
 }
 
 const baseInput = {

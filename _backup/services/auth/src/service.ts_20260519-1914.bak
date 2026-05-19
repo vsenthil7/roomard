@@ -9,9 +9,8 @@ import {
 } from '@roomard/errors';
 import { rolesToPermissions } from '@roomard/service-framework';
 import { compare } from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT } from 'jose';
 import { authenticator } from 'otplib';
-import type { PoolClient } from 'pg';
 
 export interface AuthServiceConfig {
   jwtSecret: string;
@@ -330,7 +329,7 @@ export class AuthService {
   }
 
   private async issueTokensWithinTx(
-    client: PoolClient,
+    client: import('pg').PoolClient,
     session: AuthenticatedSession,
     _replacesId: string | null,
   ): Promise<{
@@ -384,10 +383,7 @@ export class AuthService {
   }
 
   private async verifyMfaToken(token: string): Promise<{ userId: string; tenantId: string }> {
-    // jwtVerify is imported at top-level — previously this used a dynamic
-    // `await import('jose')` which (a) cost an extra microtask per MFA verify
-    // on a hot security path, and (b) implied lazy-load semantics the rest of
-    // the file already contradicts by eagerly importing SignJWT.
+    const { jwtVerify } = await import('jose');
     const secret = new TextEncoder().encode(this.cfg.jwtSecret);
     try {
       const { payload } = await jwtVerify(token, secret, {

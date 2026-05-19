@@ -1,6 +1,5 @@
 import { createHmac } from 'node:crypto';
 
-import type { PoolClient } from 'pg';
 import { describe, it, expect, vi } from 'vitest';
 
 import { verifyMewsSignature, ingestMewsReservation } from '../../src/server.js';
@@ -43,7 +42,7 @@ describe('ingestMewsReservation', () => {
         return h(sql, params);
       }),
       release: vi.fn(),
-    } as unknown as PoolClient;
+    } as unknown as import('pg').PoolClient;
   }
 
   const baseInput = {

@@ -7,7 +7,6 @@ import { useForm } from 'react-hook-form';
 
 import { apiFetch, ApiError } from '../lib/api.js';
 import { useAuthStore } from '../stores/auth.js';
-import type { Principal } from '../stores/auth.js';
 
 import { Route as RootRoute } from './__root.js';
 
@@ -43,7 +42,7 @@ function Login() {
         status: 'success' | 'mfa_required';
         mfa_token?: string;
         tokens?: { access_token: string; refresh_token: string };
-        principal?: Principal;
+        principal?: import('../stores/auth.js').Principal;
       }>('/v1/auth/password/login', {
         method: 'POST',
         body: { email: values.email, password: values.password, tenant_slug: values.tenantSlug },
@@ -68,7 +67,7 @@ function Login() {
     try {
       const res = await apiFetch<{
         tokens: { access_token: string; refresh_token: string };
-        principal: Principal;
+        principal: import('../stores/auth.js').Principal;
       }>('/v1/auth/mfa/verify', {
         method: 'POST',
         body: { mfa_token: mfaToken, code: values.code },

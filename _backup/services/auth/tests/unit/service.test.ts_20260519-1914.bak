@@ -1,4 +1,3 @@
-import type { RoomardPool } from '@roomard/db';
 import { hash } from 'bcryptjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -10,7 +9,7 @@ interface FakeRow {
 }
 
 function makePool(handlers: Array<(sql: string, params: unknown[]) => FakeRow>): {
-  pool: RoomardPool;
+  pool: import('@roomard/db').RoomardPool;
   calls: Array<{ sql: string; params: unknown[] }>;
 } {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
@@ -32,7 +31,7 @@ function makePool(handlers: Array<(sql: string, params: unknown[]) => FakeRow>):
     query: vi.fn(async (sql: string, params: unknown[] = []) => exec(sql, params)),
     connect: vi.fn(async () => client),
     close: vi.fn(async () => {}),
-  } as unknown as RoomardPool;
+  } as unknown as import('@roomard/db').RoomardPool;
   return { pool, calls };
 }
 

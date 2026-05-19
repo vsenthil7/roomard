@@ -1,15 +1,13 @@
-import { withTenantContext, type RoomardPool } from '@roomard/db';
+import { withTenantContext } from '@roomard/db';
 import {
   AuthenticationError,
   AuthorizationError,
-  NotFoundError,
   ValidationError,
   isRoomardError,
   toSerializedError,
 } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { PoolClient } from 'pg';
 import { ZodError } from 'zod';
 
 import { type AuthPrincipal, type AuthConfig, verifyAccessToken } from './auth.js';
@@ -54,14 +52,13 @@ export function applyFramework(app: FastifyInstance, opts: FrameworkOptions): vo
   });
 
   app.setNotFoundHandler((req, reply) => {
-    // Emit the canonical error envelope so clients can branch on a single shape
-    // across every endpoint. Previously this returned a divergent { error: {...} }
-    // envelope which broke generic error parsing in the web client.
-    const nf = new NotFoundError(`route ${req.method} ${req.url} not found`, {
-      method: req.method,
-      url: req.url,
+    reply.code(404).send({
+      error: {
+        code: 'NOT_FOUND',
+        message: `route ${req.method} ${req.url} not found`,
+        requestId: String(req.id),
+      },
     });
-    reply.code(nf.status).send(toSerializedError(nf, String(req.id)));
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -98,9 +95,9 @@ export function applyFramework(app: FastifyInstance, opts: FrameworkOptions): vo
  * (RLS + audit triggers will see app.tenant_id, app.user_id, app.request_id).
  */
 export function withPrincipalContext<T>(
-  pool: RoomardPool,
+  pool: import('@roomard/db').RoomardPool,
   req: FastifyRequest,
-  fn: (client: PoolClient) => Promise<T>,
+  fn: (client: import('pg').PoolClient) => Promise<T>,
 ): Promise<T> {
   const principal = req.principal;
   if (!principal) {
