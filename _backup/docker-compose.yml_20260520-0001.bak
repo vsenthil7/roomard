@@ -358,19 +358,15 @@ services:
     image: roomard/ai-gateway:dev
     container_name: roomard-ai-gateway
     restart: unless-stopped
-    # ai-gateway needs postgres + redis: it logs every call to ai_call_logs
-    # and enforces per-tenant per-minute and daily-token caps using SQL
-    # window queries against that table.
-    depends_on: *depends-data
+    # ai-gateway does not need postgres; it brokers Qianfan/MaaS calls only.
     environment:
-      <<: [*env-log, *env-jwt, *env-db]
+      <<: [*env-log, *env-jwt]
       APP_NAME: "ai-gateway"
       AI_GATEWAY_PORT: "3008"
       PORT: "3008"
       # Provider selection. 'mock' is the default for local; 'qianfan' requires
       # QIANFAN_AK / QIANFAN_SK and runs against the real Baidu endpoint.
       AI_PROVIDER: "mock"
-      AI_GATEWAY_MOCK: "true"
       # QIANFAN_AK: ""
       # QIANFAN_SK: ""
     ports:
