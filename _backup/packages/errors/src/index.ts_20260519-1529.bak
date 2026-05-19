@@ -83,57 +83,14 @@ export class ValidationError extends RoomardError {
 }
 
 export class AuthenticationError extends RoomardError {
-  /**
-   * Two call patterns supported (matches ConflictError/IntegrationError convention):
-   *   new AuthenticationError()                                 // defaults
-   *   new AuthenticationError(message)                          // (message) shorthand - default code
-   *   new AuthenticationError(code, message)                    // explicit code+message
-   *   new AuthenticationError(message, details)                 // (message, details)
-   *   new AuthenticationError(code, message, details)           // full form
-   */
-  constructor(
-    codeOrMessage: string = 'unauthenticated',
-    messageOrDetails: string | ErrorDetail[] | Record<string, unknown> = 'Authentication required',
-    details?: ErrorDetail[] | Record<string, unknown>,
-  ) {
-    // If second arg is a string -> (code, message [, details])
-    // If second arg is non-string -> (message, details), code defaults
-    if (typeof messageOrDetails === 'string') {
-      super(codeOrMessage, messageOrDetails, {
-        category: 'authentication',
-        status: 401,
-        details: normaliseDetails(details),
-      });
-    } else {
-      super('unauthenticated', codeOrMessage, {
-        category: 'authentication',
-        status: 401,
-        details: normaliseDetails(messageOrDetails),
-      });
-    }
+  constructor(code = 'unauthenticated', message = 'Authentication required') {
+    super(code, message, { category: 'authentication', status: 401 });
   }
 }
 
 export class AuthorizationError extends RoomardError {
-  /** Same flexible signature as AuthenticationError. */
-  constructor(
-    codeOrMessage: string = 'forbidden',
-    messageOrDetails: string | ErrorDetail[] | Record<string, unknown> = 'Operation not permitted',
-    details?: ErrorDetail[] | Record<string, unknown>,
-  ) {
-    if (typeof messageOrDetails === 'string') {
-      super(codeOrMessage, messageOrDetails, {
-        category: 'authorization',
-        status: 403,
-        details: normaliseDetails(details),
-      });
-    } else {
-      super('forbidden', codeOrMessage, {
-        category: 'authorization',
-        status: 403,
-        details: normaliseDetails(messageOrDetails),
-      });
-    }
+  constructor(code = 'forbidden', message = 'Operation not permitted') {
+    super(code, message, { category: 'authorization', status: 403 });
   }
 }
 
