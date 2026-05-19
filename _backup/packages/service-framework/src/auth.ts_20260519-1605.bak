@@ -6,8 +6,6 @@ export interface AuthPrincipal {
   tenantId: string;
   roles: string[];
   permissions: Set<string>;
-  /** True if the JWT was issued after a fresh MFA assertion. Defaults false. */
-  mfaVerified: boolean;
 }
 
 export interface AuthConfig {
@@ -47,7 +45,6 @@ export async function verifyAccessToken(
       tenantId: String(payload.tid),
       roles,
       permissions: new Set(perms),
-      mfaVerified: Boolean(payload.mfa),
     };
   } catch (err) {
     throw new AuthenticationError('invalid or expired access token', {

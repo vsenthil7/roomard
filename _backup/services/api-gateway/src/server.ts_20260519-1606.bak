@@ -11,7 +11,7 @@
  * Internal services trust the inbound JWT (verified again with shared secret —
  * defence in depth) and read tenant/user/role from claims.
  */
-import Fastify, { type FastifyRequest, type FastifyReply, type RouteHandlerMethod } from 'fastify';
+import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
 import rateLimit from '@fastify/rate-limit';
@@ -82,7 +82,7 @@ export function buildServer(deps: BuildDeps) {
 
   // Generic handler for all other routes
   const authConfig = authConfigFromEnv();
-  const handler: RouteHandlerMethod = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  const handler = async (req: Parameters<typeof Fastify>[0] extends never ? never : import('fastify').FastifyRequest, reply: import('fastify').FastifyReply): Promise<void> => {
     const method = req.method as 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT';
     const path = req.url.split('?')[0]!;
     const rule = matchRoute(method, path);
@@ -169,11 +169,13 @@ export function buildServer(deps: BuildDeps) {
       method,
       url: '/v1/*',
       handler,
+      config: { rawBody: true },
     });
     app.route({
       method,
       url: '/webhooks/*',
       handler,
+      config: { rawBody: true },
     });
   }
 
@@ -181,13 +183,12 @@ export function buildServer(deps: BuildDeps) {
   app.setErrorHandler((err, req, reply) => {
     if (isRoomardError(err)) {
       reply
-        .code(err.status)
+        .code(err.statusCode)
         .send(toSerializedError(err, String(req.id)));
       return;
     }
     if ((err as { validation?: unknown }).validation) {
-      const message = err instanceof Error ? err.message : 'validation error';
-      reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message, requestId: String(req.id) } });
+      reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: err.message, requestId: String(req.id) } });
       return;
     }
     log.error({ err, reqId: req.id }, 'unhandled error');
