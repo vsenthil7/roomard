@@ -84,31 +84,28 @@ export class ValidationError extends RoomardError {
 
 export class AuthenticationError extends RoomardError {
   /**
-   * Flexible signature matching ConflictError / IntegrationError convention.
+   * Two call patterns supported (matches ConflictError/IntegrationError convention):
    *   new AuthenticationError()                                 // defaults
-   *   new AuthenticationError(message)                          // shorthand: code defaults to 'unauthenticated'
-   *   new AuthenticationError(message, details)                 // shorthand with details
+   *   new AuthenticationError(message)                          // (message) shorthand - default code
    *   new AuthenticationError(code, message)                    // explicit code+message
+   *   new AuthenticationError(message, details)                 // (message, details)
    *   new AuthenticationError(code, message, details)           // full form
-   *
-   * The disambiguator is the SECOND arg: if it's a string we have (code, message);
-   * if it's an object or undefined we have (message[, details]).
    */
   constructor(
-    messageOrCode: string = 'Authentication required',
-    messageOrDetails?: string | ErrorDetail[] | Record<string, unknown>,
+    codeOrMessage: string = 'unauthenticated',
+    messageOrDetails: string | ErrorDetail[] | Record<string, unknown> = 'Authentication required',
     details?: ErrorDetail[] | Record<string, unknown>,
   ) {
+    // If second arg is a string -> (code, message [, details])
+    // If second arg is non-string -> (message, details), code defaults
     if (typeof messageOrDetails === 'string') {
-      // (code, message [, details])
-      super(messageOrCode, messageOrDetails, {
+      super(codeOrMessage, messageOrDetails, {
         category: 'authentication',
         status: 401,
         details: normaliseDetails(details),
       });
     } else {
-      // (message [, details])
-      super('unauthenticated', messageOrCode, {
+      super('unauthenticated', codeOrMessage, {
         category: 'authentication',
         status: 401,
         details: normaliseDetails(messageOrDetails),
@@ -120,18 +117,18 @@ export class AuthenticationError extends RoomardError {
 export class AuthorizationError extends RoomardError {
   /** Same flexible signature as AuthenticationError. */
   constructor(
-    messageOrCode: string = 'Operation not permitted',
-    messageOrDetails?: string | ErrorDetail[] | Record<string, unknown>,
+    codeOrMessage: string = 'forbidden',
+    messageOrDetails: string | ErrorDetail[] | Record<string, unknown> = 'Operation not permitted',
     details?: ErrorDetail[] | Record<string, unknown>,
   ) {
     if (typeof messageOrDetails === 'string') {
-      super(messageOrCode, messageOrDetails, {
+      super(codeOrMessage, messageOrDetails, {
         category: 'authorization',
         status: 403,
         details: normaliseDetails(details),
       });
     } else {
-      super('forbidden', messageOrCode, {
+      super('forbidden', codeOrMessage, {
         category: 'authorization',
         status: 403,
         details: normaliseDetails(messageOrDetails),
@@ -206,18 +203,18 @@ export class IntegrationError extends RoomardError {
 export class ServiceUnavailableError extends RoomardError {
   /** Flexible signature: (message), (message, details), (code, message), (code, message, details). */
   constructor(
-    messageOrCode: string = 'Service temporarily unavailable',
-    messageOrDetails?: string | ErrorDetail[] | Record<string, unknown>,
+    codeOrMessage: string = 'service_unavailable',
+    messageOrDetails: string | ErrorDetail[] | Record<string, unknown> = 'Service temporarily unavailable',
     details?: ErrorDetail[] | Record<string, unknown>,
   ) {
     if (typeof messageOrDetails === 'string') {
-      super(messageOrCode, messageOrDetails, {
+      super(codeOrMessage, messageOrDetails, {
         category: 'unavailable',
         status: 503,
         details: normaliseDetails(details),
       });
     } else {
-      super('service_unavailable', messageOrCode, {
+      super('service_unavailable', codeOrMessage, {
         category: 'unavailable',
         status: 503,
         details: normaliseDetails(messageOrDetails),
