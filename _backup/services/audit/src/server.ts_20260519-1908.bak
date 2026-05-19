@@ -1,8 +1,7 @@
 import sensible from '@fastify/sensible';
 import { RoomardPool, dbConfigFromEnv } from '@roomard/db';
-import { ValidationError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
-import { AuditQuerySchema, AuditExportRequestSchema, IsoDateTimeSchema } from '@roomard/schemas';
+import { AuditQuerySchema, AuditExportRequestSchema, UuidSchema } from '@roomard/schemas';
 import {
   applyFramework,
   authConfigFromEnv,
@@ -13,22 +12,10 @@ import {
 } from '@roomard/service-framework';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 
 import { queryEvents, verifyChain } from './service.js';
 
 const log = createLogger({ name: 'audit-svc' });
-
-/**
- * Schema for /v1/audit/verify query params.
- * `from` and `to` are required ISO-8601 datetimes; we never accept raw strings
- * from user input straight to SQL because malformed values can either widen the
- * scan or break Postgres timestamp parsing in non-obvious ways.
- */
-const VerifyQuerySchema = z.object({
-  from: IsoDateTimeSchema,
-  to: IsoDateTimeSchema,
-});
 
 export function buildServer(deps: { pool: RoomardPool }): FastifyInstance {
   const app = Fastify({
@@ -64,17 +51,15 @@ export function buildServer(deps: { pool: RoomardPool }): FastifyInstance {
   app.get('/v1/audit/verify', async (req, replyHttp) => {
     const principal = requirePrincipal(req);
     requirePermission(principal, 'audit.read');
-    // Validate query params with the typed schema. Zod errors are caught by the
-    // framework's error handler and surfaced as a 400 with the canonical envelope.
-    const parsed = VerifyQuerySchema.safeParse(req.query ?? {});
-    if (!parsed.success) {
-      throw new ValidationError('from and to ISO-8601 datetimes are required', {
-        issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+    const q = req.query as { from?: string; to?: string };
+    if (!q.from || !q.to) {
+      replyHttp.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'from and to query params required' },
       });
+      return;
     }
-    const { from, to } = parsed.data;
     const result = await withPrincipalContext(deps.pool, req, (client) =>
-      verifyChain(client, principal.tenantId, from, to),
+      verifyChain(client, principal.tenantId, q.from!, q.to!),
     );
     reply(replyHttp, 200, result);
   });
