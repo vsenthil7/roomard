@@ -1,12 +1,11 @@
 /**
  * Login route. Email + password, then MFA challenge if required.
  */
-import { createRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../stores/auth.js';
 import { apiFetch, ApiError } from '../lib/api.js';
-import { Route as RootRoute } from './__root.js';
 
 interface LoginForm {
   email: string;
@@ -18,9 +17,7 @@ interface MfaForm {
   code: string;
 }
 
-export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/login',
+export const Route = createFileRoute('/login')({
   component: Login,
 });
 

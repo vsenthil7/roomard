@@ -7,18 +7,15 @@
  * Camera uses native <input type="file" accept="image/*" capture="environment">,
  * which on mobile opens the rear camera. Desktop falls back to a regular picker.
  */
-import { createRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { apiFetch, ApiError } from '../lib/api.js';
 import { enqueueCapture } from '../lib/offline-queue.js';
 import { useAuthStore } from '../stores/auth.js';
-import { Route as RootRoute } from './__root.js';
 
-export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/captures/new',
+export const Route = createFileRoute('/captures/new')({
   component: CaptureNew,
 });
 
