@@ -41,42 +41,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm -r --filter "@roomard/*" run test:coverage
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: '**/coverage/lcov.info'
-
-  coverage-gate:
-    # Aggregate-coverage gate runs as its own job so a coverage shortfall
-    # surfaces as an isolated red signal instead of cascading-blocking every
-    # downstream job (docker-build, e2e, security-scan). Tests passing and
-    # coverage being below target are two different facts the dashboard
-    # should show separately.
-    name: Coverage gate (>=90%)
-    runs-on: ubuntu-latest
-    needs: [unit-tests]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage
       - name: Enforce coverage gate
         run: |
           set -e
           # Sum coverage from all lcov.info files and fail if statements coverage < 90%
           node -e "
             const fs = require('fs');
-            const path = require('path');
-            function walk(dir) {
-              const out = [];
-              for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-                const full = path.join(dir, e.name);
-                if (e.isDirectory()) out.push(...walk(full));
-                else if (e.name === 'lcov.info') out.push(full);
-              }
-              return out;
-            }
-            const files = walk('.');
+            const { globSync } = require('glob');
+            const files = globSync('**/coverage/lcov.info', { ignore: 'node_modules/**' });
             let stmts = 0, hit = 0;
             for (const f of files) {
               const txt = fs.readFileSync(f, 'utf8');
@@ -88,6 +60,10 @@ jobs:
             console.log('Coverage:', pct.toFixed(2) + '%');
             if (pct < 90) { console.error('Coverage gate failed (<90%)'); process.exit(1); }
           "
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/coverage/lcov.info'
 
   integration-tests:
     name: Integration tests (Postgres + Redis + MinIO)
@@ -151,7 +127,7 @@ jobs:
   e2e-tests:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    needs: [unit-tests, docker-build]
+    needs: [unit-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -187,7 +163,7 @@ jobs:
   security-scan:
     name: ZAP baseline scan
     runs-on: ubuntu-latest
-    needs: [lint-typecheck, docker-build]
+    needs: [unit-tests]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -210,7 +186,7 @@ jobs:
   docker-build:
     name: Build container images
     runs-on: ubuntu-latest
-    needs: [lint-typecheck]
+    needs: [unit-tests]
     strategy:
       matrix:
         service: [api-gateway, auth, tenant, guest, capture, brief, exception, audit, ingest, ai-gateway]
