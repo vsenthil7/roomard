@@ -2,22 +2,25 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 10:34 BST (CP-68)
+**Last updated:** 2026-05-20 11:52 BST (CP-71)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 343 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 343 passing, 0 failing (workspace unit suites); **+8 DB integration tests now passing** when run with `DATABASE_URL` set (no longer skipped)
 
 ---
 
-## Session timeline (CP-1 → CP-68)
+## Session timeline (CP-1 → CP-71)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 68 total since session start)
+### Commits landed (newest → oldest, 71 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-68 | [DOCS] | Traceability live through CP-67 — finishes the apps/web lift + the api-gateway lift. Records CP-65 (captures.new + prep-cards forms, →86.6%), CP-66 (useOfflineReplay hook →100%, web →89.3%), CP-67 (api-gateway authenticated-proxy + RBAC tests, 72→79%). Workspace 328→343 tests. | ✅ |
+| (this) | CP-71 | [DOCS] | Traceability live through CP-70 — the DB-integration unblock. Records CP-69 (**G-35** production fix) + CP-70 (db integration enablement, **G-34** schema drift + **G-36** RLS/provisioning finding). All 8 db integration tests now pass against the live Postgres. Score 37 fixed, 1 invalid, 1 open (G-36 infra). | ✅ |
+| `aafa16f` | CP-70 | [FEAT] | Enable the 7 (now 8) skipped db integration tests against the live container Postgres; fix the schema drift they exposed (**G-34**) and rewrite the RLS test to genuinely verify isolation via a restricted role (**G-36**). 4 rls + 4 audit tests green with `DATABASE_URL` set; remain gated (skip cleanly) without it. | ✅ live PG |
+| `58a991c` | CP-69 | [FIX] | **G-35** (production bug) — `tenant-context.applyContext` used `SET LOCAL app.x = $1` with bind params; Postgres `SET` rejects `$1` → every `withTenantContext` call would throw against real Postgres. Latent because unit tests use `createFakePool` (never parses SET). Rewrote to `SELECT set_config($1,$2,$3)`. 343 workspace tests unchanged (fake-pool compatible); validated against live PG. | ✅ live PG |
+| `13c8f9a` | CP-68 | [DOCS] | Traceability live through CP-67 — finishes the apps/web lift + the api-gateway lift. Records CP-65 (captures.new + prep-cards forms, →86.6%), CP-66 (useOfflineReplay hook →100%, web →89.3%), CP-67 (api-gateway authenticated-proxy + RBAC tests, 72→79%). Workspace 328→343 tests. | ✅ |
 | `303c611` | CP-67 | [FEAT] | api-gateway authenticated-proxy + RBAC server tests — added test-utils dep + `mintTestToken`; covers the authed GET proxy (x-actor-id/tenant injection), response status+header pass-through, 403 insufficient-perm, and the requireMfa 401 branch. api-gateway 14→18 tests; **72.4→79.3%** (server.ts 68.6→77.8). | ✅ |
 | `f629cb9` | CP-66 | [FEAT] | apps/web `useOfflineReplay` hook tests — replay-success removes the item, replay-failure marks it, maxed-out items skipped, offline no-op. hook 0→100. web 35→39 tests; **86.6→89.3%**. Only `main.tsx` (bootstrap entry) remains — a genuine floor. | ✅ |
 | `62cf234` | CP-65 | [FEAT] | apps/web captures.new + prep-cards route tests (the two heaviest forms). captures.new 3.8→91.7 (file upload, online success, offline-queue fallback on 5xx), prep-cards 2.8→93.8 (auto-select, two-tap complete, empty state). web 28→35 tests; **56.7→86.6%**. All 7 route components now 84–100%. | ✅ |
@@ -87,7 +90,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-33)
+## Bugs discovered & status (G-1 through G-36)
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -108,8 +111,11 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-31 | DB schema never migrated to the running Postgres container — `relation "users" does not exist` on first real login. Provisioning gap, not a code bug. Applied 16 migrations + seed via `DATABASE_URL=...@localhost:5532/roomard pnpm --filter @roomard/db migrate` then `seed`. | ✅ FIXED | CP-50 |
 | G-32 | auth-svc `buildSession` queried `roles.permissions` with `jsonb_array_elements_text` (array-only) but the schema/seed store permissions as an OBJECT of `{ resource: [actions] }` (or `{ all: ['*'] }`). Every login threw Postgres 22023 `cannot extract elements from an object` *after* the user lookup succeeded. Fixed by fetching raw jsonb and flattening in TypeScript (`flattenRolePermissions`). | ✅ FIXED | CP-50 |
 | G-33 | logger Sentry forwarder was **dead code** — the pino `logMethod` hook gated forwarding on `method.name === 'error'/'fatal'`, but pino always passes `method.name === "LOG"` and supplies the numeric level as the hook's THIRD argument. So the condition never matched and the entire Sentry error-forwarding integration (built in CP-42) had never fired in any environment. Found while writing tests to lift logger off 38.7%. Fixed to gate on `level >= 50` (error=50, fatal=60). | ✅ FIXED | CP-57 |
+| G-34 | DB integration tests carried **schema drift** — written against an imagined schema and never run (skipped on missing `DATABASE_URL`), so the drift was invisible. Real mismatches: tenant seed used `legal_name` (real col `name`) and tier `'starter'` (invalid; enum is `property/group_starter/group/enterprise`); audit assertions used `hash`/`resource_type` (real cols `event_hash`/`resource_kind`); `operation` for an insert is `'create'` not `'insert'`; `event_hash` is `bytea` (32 raw bytes, not 64 hex chars) so Buffer comparison needs `toStrictEqual`; request IDs were non-UUID strings but the GUC + `assertUuid` require UUIDs. All corrected to match the real schema. | ✅ FIXED | CP-70 |
+| G-35 | (PRODUCTION BUG) `tenant-context.applyContext` set the per-transaction RLS/audit GUCs with `SET LOCAL app.x = $1` using **bind parameters** — but Postgres `SET`/`SET LOCAL` only accept literals, not `$1`, so every statement throws `syntax error at or near "$1"` against a real server. This means **every** `withTenantContext`/`withReadOnlyTenantContext` call (the wrapper all tenant-scoped reads/writes use) would have failed at runtime against real Postgres. Stayed latent because the entire unit suite uses `createFakePool`, which never parses SET syntax; the live login path (CP-50) worked only because `buildSession` uses raw pool queries, not the wrapper. Fixed to `SELECT set_config($1,$2,$3)` (the parameterisable function form; `is_local` mirrors SET LOCAL). The `withReadOnlyTenantContext` cleanup path already used `set_config` — this aligns the apply path with it. Surfaced only by running the db integration tests against live Postgres. | ✅ FIXED | CP-69 |
+| G-36 | (SECURITY / PROVISIONING) RLS is enabled **and FORCED** on `guests` (`relrowsecurity=t, relforcerowsecurity=t`), but the app's `roomard` DB role is `rolsuper=t, rolbypassrls=t` — a superuser with BYPASSRLS **ignores RLS entirely, even under FORCE**. So in the dev/CI container, multi-tenant RLS isolation is **not actually enforced**. The RLS test was rewritten to provision a restricted `roomard_rls_test` role (NOSUPERUSER NOBYPASSRLS) and prove isolation genuinely through it, plus a test that documents the current bypass. **Remediation is an infra/provisioning change**: the application must connect to production Postgres as a non-superuser, non-BYPASSRLS role, or RLS provides no protection. | 🔶 OPEN (infra) | — |
 
-**Score: 34 fixed, 1 invalid (G-5), 0 functional bugs open.**
+**Score: 37 fixed, 1 invalid (G-5), 1 open (G-36 — infra/provisioning, not a code defect).**
 
 The login path is now demonstrably working end to end on the live 15-container stack — a user can authenticate through the browser-facing nginx route and receive a working JWT that the gateway accepts on protected endpoints.
 
@@ -167,11 +173,11 @@ Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was*
 | audit | 73.4 | **75.7** | 14→16 | ↑ CP-58 (server.ts 78; verifyChain needs DB integration) |
 | auth | 40.1 | **74.6** | 16→30 | ↑ CP-56 (service.ts 79, server.ts 63) |
 | ai-gateway | 75.0 | 75.0 | 37 | mid |
-| db | 3.2 | 3.2 | 7 skipped | **blocked — integration tests need a test Postgres** |
+| db | 3.2 | 3.2 (unit) | **8 integration** | **un-skipped CP-69/70** — 4 RLS + 4 audit pass against live Postgres (G-35 fix validated; RLS proven via restricted role per G-36). v8 line-coverage of `src/` still reads low because integration tests run as a separate `DATABASE_URL`-gated suite, but the tenant-context + RLS + audit-chain paths are now genuinely exercised end-to-end. |
 
 *(service-framework has 13 tests but no `test:coverage` script; not measured here.)*
 
-**What's left:** db (3.2%, blocked on a test Postgres — its 7 tests are *skipped*, not missing); ai-gateway (75%) + the mid-70s services have remaining branches but each also has a legitimate floor. The recurring floors, flagged honestly rather than padded: every service's `start()` (binds a port — needs a live listen), apps/web `main.tsx` (ReactDOM mount + PWA SW registration — runs only in a real browser), and audit's `verifyChain` hash-chain logic (needs real linked rows — DB integration territory). 100% on these specific units is not achievable without standing up external infra; this is stated plainly rather than faked.
+**What's left:** ai-gateway (75%) + the mid-70s services (auth, audit, exception, guest, ingest) have remaining branches to lift where unit-testable. The recurring **legitimate floors**, flagged honestly rather than padded: every service's `start()` (binds a port — needs a live listen), apps/web `main.tsx` (ReactDOM mount + PWA SW registration — runs only in a real browser), and audit's `verifyChain` hash-chain logic (now partially de-risked by the db audit-chain integration test, but full verifyChain coverage still wants real linked rows). The one **open security item** is G-36: production DB provisioning must use a non-superuser, non-BYPASSRLS role or RLS is inert. 100% on the floored units isn't achievable without external infra; stated plainly rather than faked.
 
 ---
 
@@ -217,8 +223,11 @@ All functional bugs are closed and the login loop is verified live. Remaining wo
 | CP-65 | apps/web — captures.new + prep-cards forms | M | ✅ DONE (→86.6%) |
 | CP-66 | apps/web — useOfflineReplay hook | S | ✅ DONE (→89.3%) |
 | CP-67 | api-gateway — authenticated-proxy + RBAC server tests | M | ✅ DONE (72→79%) |
-| CP-69 | db — point the 7 skipped integration tests at the running test Postgres | M | next (blocked until test PG up) |
-| CP-70 | Re-measure aggregate, push remaining mid-70s services to ≥90% where unit-testable, lock baseline in COVERAGE_BASELINE.md | S | pending |
+| CP-69 | **G-35** production fix — `applyContext` SET-bind-param bug | S | ✅ DONE (live PG) |
+| CP-70 | db integration enablement — G-34 schema drift + G-36 RLS rewrite | M | ✅ DONE (8/8 db tests) |
+| CP-72 | ai-gateway + mid-70s services (auth/audit/exception/guest/ingest) — lift remaining unit-testable branches to ≥90% | M | next |
+| CP-73 | Re-measure aggregate; lock the baseline in COVERAGE_BASELINE.md | S | pending |
+| CP-74 | (infra) **G-36** remediation — provision the app DB role as NOSUPERUSER NOBYPASSRLS so RLS enforces in the live stack | M | pending (infra) |
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
