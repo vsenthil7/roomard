@@ -25,8 +25,8 @@ describeOrSkip('Audit chain', () => {
     raw = new Pool({ connectionString: process.env.DATABASE_URL });
     pool = new RoomardPool({ connectionString: process.env.DATABASE_URL! });
     await raw.query(
-      `INSERT INTO tenants (id, slug, legal_name, tier, status, data_residency)
-       VALUES ($1, 'tenant-audit', 'Audit Test', 'starter', 'active', 'eu')
+      `INSERT INTO tenants (id, slug, name, tier, status, data_residency)
+       VALUES ($1, 'tenant-audit', 'Audit Test', 'property', 'active', 'eu')
        ON CONFLICT (id) DO NOTHING`,
       [TENANT],
     );
@@ -44,7 +44,7 @@ describeOrSkip('Audit chain', () => {
         tenantId: TENANT,
         userId: '00000000-0000-4000-8000-000000000100',
         actorKind: 'user',
-        requestId: 'audit-test-1',
+        requestId: '00000000-0000-4000-8000-0000000ad001',
       },
       async (client) => {
         const { rows } = await client.query<{ id: string }>(
@@ -55,13 +55,15 @@ describeOrSkip('Audit chain', () => {
       },
     );
 
-    const { rows } = await raw.query<{ id: string; hash: string; previous_hash: string | null; operation: string }>(
-      `SELECT id, hash, previous_hash, operation FROM audit_events WHERE resource_type = 'guest' AND resource_id = $1`,
+    const { rows } = await raw.query<{ id: string; event_hash: string; previous_hash: string | null; operation: string }>(
+      `SELECT id, event_hash, previous_hash, operation FROM audit_events WHERE resource_kind = 'guest' AND resource_id = $1`,
       [guestId],
     );
     expect(rows.length).toBeGreaterThanOrEqual(1);
-    expect(rows[0]!.hash.length).toBe(64); // SHA-256 hex
-    expect(rows[0]!.operation).toBe('insert');
+    // event_hash is bytea (raw 32-byte SHA-256 digest), not a 64-char hex string.
+    expect(rows[0]!.event_hash.length).toBe(32);
+    // The audit trigger records an INSERT as operation 'create' (not 'insert').
+    expect(rows[0]!.operation).toBe('create');
   });
 
   it('UPDATE on audit_events raises restrict_violation', async () => {
@@ -87,7 +89,7 @@ describeOrSkip('Audit chain', () => {
         tenantId: TENANT,
         userId: '00000000-0000-4000-8000-000000000100',
         actorKind: 'user',
-        requestId: 'audit-chain-2a',
+        requestId: '00000000-0000-4000-8000-0000000ad002',
       },
       async (client) => {
         await client.query(
@@ -102,7 +104,7 @@ describeOrSkip('Audit chain', () => {
         tenantId: TENANT,
         userId: '00000000-0000-4000-8000-000000000100',
         actorKind: 'user',
-        requestId: 'audit-chain-2b',
+        requestId: '00000000-0000-4000-8000-0000000ad003',
       },
       async (client) => {
         await client.query(
@@ -112,12 +114,13 @@ describeOrSkip('Audit chain', () => {
       },
     );
 
-    const { rows } = await raw.query<{ id: string; hash: string; previous_hash: string | null }>(
-      `SELECT id, hash, previous_hash FROM audit_events WHERE tenant_id = $1 ORDER BY occurred_at DESC LIMIT 2`,
+    const { rows } = await raw.query<{ id: string; event_hash: string; previous_hash: string | null }>(
+      `SELECT id, event_hash, previous_hash FROM audit_events WHERE tenant_id = $1 ORDER BY occurred_at DESC LIMIT 2`,
       [TENANT],
     );
     expect(rows.length).toBe(2);
-    // Newest row's previous_hash should equal the second row's hash
-    expect(rows[0]!.previous_hash).toBe(rows[1]!.hash);
+    // Newest row's previous_hash should equal the second row's event_hash.
+    // Both are bytea (Buffer), so compare by value with toStrictEqual, not toBe.
+    expect(rows[0]!.previous_hash).toStrictEqual(rows[1]!.event_hash);
   });
 });
