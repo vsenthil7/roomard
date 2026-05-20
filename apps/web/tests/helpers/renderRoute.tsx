@@ -60,3 +60,30 @@ export async function renderRouteComponent(
   );
   await waitFor(() => expect(router.state.status).toBe('idle'));
 }
+
+/**
+ * Render the REAL application route tree (from src/routes/routeTree) at a given
+ * path. Use this when a route relies on `Route.useParams()` or on the real
+ * `__root` layout, which a re-parented copy can't provide. The caller is
+ * responsible for seeding the auth store so `__root`'s beforeLoad guard does
+ * not redirect to /login.
+ */
+export async function renderRealTree(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  routeTree: any,
+  initialPath: string,
+): Promise<void> {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: [initialPath] }),
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(router.state.status).toBe('idle'));
+}
