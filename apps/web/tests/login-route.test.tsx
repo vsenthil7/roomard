@@ -38,7 +38,7 @@ async function renderRoute(childRoute: typeof LoginRoute, initialPath: string): 
   // Re-parent the child route onto our test root.
   const child = createRoute({
     getParentRoute: () => rootRoute,
-    path: childRoute.options.path as string,
+    path: (childRoute.options as { path?: string }).path ?? '/',
     component: childRoute.options.component,
   });
   const routeTree = rootRoute.addChildren([child]);

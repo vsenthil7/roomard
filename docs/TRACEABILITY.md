@@ -2,21 +2,22 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 14:08 BST (CP-77)
+**Last updated:** 2026-05-20 23:30 BST (CP-79)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
 **Total tests:** 356 passing, 0 failing (workspace unit suites); **12 DB integration tests** passing with `DATABASE_URL` set (8→12 at CP-77 — the G-36 remediation verification)
 
 ---
 
-## Session timeline (CP-1 → CP-77)
+## Session timeline (CP-1 → CP-79)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 77 total since session start)
+### Commits landed (newest → oldest, 79 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
+| (pending) | CP-79 | [FIX] | **G-38** (build-integrity) — the production web Docker image could not build: its Dockerfile runs `pnpm --filter @roomard/web build` = `tsc -b && vite build`, and the web `tsconfig.json` `include`d `tests`, so `tsc -b` typechecked the test files under `noUncheckedIndexedAccess`. Four real strict-null violations in `offline-queue.test.ts` (array-index + destructure access) and one `RouteOptions.path` access in `login-route.test.tsx` aborted the build (`ERR_PNPM…web build: exit 1`), blocking any `docker compose build`. Fixed properly: added `apps/web/tsconfig.build.json` (src-only) so the production bundle never typechecks tests, kept full `tsc --noEmit` (src+tests) for CI/IDE, and null-guarded the offending tests. Both `tsc -p tsconfig.build.json` and full `tsc --noEmit` exit 0; web 39/39 tests unchanged; all 11 service+web images rebuild clean. | ✅ images built |
 | `5580a49` | CP-77 | [FIX] | **G-36** remediation (closes the last open issue) — RLS is FORCED on every tenant table but the app connected as the superuser/BYPASSRLS `roomard` role, so isolation was silently unenforced. Migration **0017** creates `roomard_app` (LOGIN NOSUPERUSER NOBYPASSRLS) with exactly the needed grants; REVOKEs UPDATE/DELETE on `audit_events` (append-only); production points `DATABASE_URL` at it (password via secrets manager), migrations keep using the bootstrap role. **Proven live:** as `roomard_app`, no tenant context → 0 guests, tenant 0001 → 24, empty tenant → 0. +4 db integration tests. | ✅ live PG |
 | `b23764b` | CP-76 | [DOCS] | Locked the coverage baseline in `COVERAGE_BASELINE.md` (replaces the stale CP-19 version). Fresh full-workspace `test:coverage` run; every per-module % copied verbatim. Unweighted mean **87.51%** across 14 measured modules (11 ≥ 80, 6 ≥ 90); honest caveat that the statement-weighted CI aggregate isn't recomputed (text reporter only). | ✅ |
 | `ec9b514` | CP-75 | [DOCS] | Traceability live through CP-74 — the mid-70s lift + a third schema-drift fix. Records CP-72 (ai-gateway 75→91%), CP-73 (auth 75→82%), CP-74 (**G-37**). Score 38 fixed, 1 invalid, 1 open. | ✅ |
@@ -96,7 +97,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-37) — ALL CLOSED
+## Bugs discovered & status (G-1 through G-38) — ALL CLOSED
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -122,7 +123,9 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-36 | (SECURITY / PROVISIONING) RLS is enabled **and FORCED** on `guests` (`relrowsecurity=t, relforcerowsecurity=t`), but the app's `roomard` DB role is `rolsuper=t, rolbypassrls=t` — a superuser with BYPASSRLS **ignores RLS entirely, even under FORCE**. So in the dev/CI container, multi-tenant RLS isolation was **not actually enforced**. **Remediated CP-77:** migration 0017 creates `roomard_app` (LOGIN NOSUPERUSER NOBYPASSRLS) with exactly the grants the services need (and UPDATE/DELETE revoked on append-only `audit_events`); production connects as this role (password via secrets manager), migrations/ops keep the privileged bootstrap role. Proven live: as `roomard_app`, no tenant context → 0 guests, tenant A → only tenant-A rows, empty tenant → 0. 4 db integration tests verify the role attributes + isolation. | ✅ FIXED | CP-77 |
 | G-37 | (PRODUCTION BUG) The **audit service** (`services/audit/src/service.ts`) was written against an IMAGINED `audit_events` schema — its `AuditRow`, `computeHash`, and the verify/query SQL referenced `hash`, `resource_type`, `payload_hash`, `actor_label`. The REAL columns (migration 0011) are `event_hash` (bytea), `resource_kind`, `actor_display`, `detail` (jsonb) — and there is **no** `payload_hash`. Proven against the live DB: `SELECT hash FROM audit_events` → `column "hash" does not exist`; `SELECT resource_type` → same. So the audit query endpoint (`/v1/audit/events` with a `resourceType` filter) AND the verify-chain endpoint (`/v1/audit/verify`, `/export`) would **500 in production**. Same drift class as G-34, caught the same way — checking the service code against the live schema. Fixed: aligned `AuditRow` (`event_hash`/`previous_hash` typed as `Buffer`); rewrote `verifyChain` to re-derive each row's hash **in SQL** using the exact migration-0011 `audit_compute_hash` recipe (`digest(concat_ws('|', …, occurred_at::text, encode(prev,'hex')), 'sha256')`) via a `LAG` window — doing it in SQL is the only way to byte-match Postgres's `occurred_at::text` rendering, which the old JS `toISOString()` recompute never could; `queryEvents` filter → `resource_kind`. Validated against live PG: all 45 cleanly-seeded chain rows verify (`hash_ok` + `link_ok`); the 5 that don't are this session's own integration-test rapid cross-tenant inserts with ambiguous same-timestamp ordering — a test-data artefact the verifier correctly flags, not a recipe error. | ✅ FIXED | CP-74 |
 
-**Score: 39 fixed, 1 invalid (G-5), 0 open.** Every functional and security finding from the audit is resolved; the security fix (G-36) is proven against the live database.
+| G-38 | (BUILD-INTEGRITY) The **production web Docker image could not build**. `apps/web/Dockerfile` runs `pnpm --filter @roomard/web build` = `tsc -b && vite build`, and `apps/web/tsconfig.json` had `"include": ["src", "tests"]`, so the production typecheck compiled the **test** files — under the repo-wide `noUncheckedIndexedAccess: true`. Four genuine strict-null violations in `offline-queue.test.ts` (`all[0].id` array-index access; `[row]`/`[row2]` destructure access) plus one `childRoute.options.path` access in `login-route.test.tsx` (the property isn't on TanStack's `RouteOptions` type) aborted the build with `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL … web build: exit 1`. This blocked **any** `docker compose build`, so the live stack could only ever run stale pre-fix images — which is exactly why the running containers still 500'd on the G-35 bug (they predated CP-69). Latent because `vitest` typechecks more leniently than `tsc -b` and CI ran tests, not the production image build. Fixed **properly, no scope-shrink**: added `apps/web/tsconfig.build.json` (extends the main config, `include: ["src"]`, excludes `tests`) and pointed the `build` script at it (`tsc -p tsconfig.build.json && vite build`) so the production bundle never typechecks tests; kept the full `tsc --noEmit` (src + tests) as `typecheck` for CI/IDE; and null-guarded the two offending tests. Verified: `tsc -p tsconfig.build.json` exit 0, full `tsc --noEmit` exit 0, web 39/39 tests unchanged, and all 11 service + web images rebuild clean (`BUILD_EXIT=0`). | ✅ FIXED | CP-79 |
+
+**Score: 40 fixed, 1 invalid (G-5), 0 open.** Every functional, security, and build-integrity finding from the audit is resolved; the security fix (G-36) is proven against the live database and all 11 images rebuild cleanly (G-38).
 
 The login path is demonstrably working end to end on the live 15-container stack, and tenant isolation is now genuinely enforced through the restricted `roomard_app` role (G-36, CP-77) rather than silently bypassed.
 
@@ -239,8 +242,9 @@ All functional bugs are closed and the login loop is verified live. Remaining wo
 | CP-76 | Lock the measured baseline in `COVERAGE_BASELINE.md` | S | ✅ DONE (mean 87.51%) |
 | CP-77 | **G-36** remediation — migration 0017 `roomard_app` NOSUPERUSER NOBYPASSRLS role so RLS enforces | M | ✅ DONE (live PG) |
 | CP-78 | (optional) lift the remaining mid-70s unit-testable branches — exception/guest/ingest/audit | M | optional |
+| CP-79 | **G-38** build-integrity fix — web production image (`tsconfig.build.json` src-only) so `docker compose build` succeeds; all 11 images rebuilt | S | ✅ DONE (images built) |
 
-**All G-issues are now closed** (39 fixed, 1 invalid, 0 open). The remaining roadmap is optional coverage polish + the externally-gated deferred items below.
+**All G-issues are now closed** (40 fixed, 1 invalid, 0 open). The remaining roadmap is optional coverage polish + the externally-gated deferred items below.
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run). **Also:** migration 0017 creates the `roomard_app` role, but the docker-compose service env still points `DATABASE_URL` at the bootstrap `roomard` superuser — a follow-up should switch the *service* containers to `roomard_app` (keeping migrate/seed on the privileged role) so the live stack exercises RLS exactly as production will. The G-36 *fix* (the role + grants + proof) is done; this is the compose-wiring follow-through.
 

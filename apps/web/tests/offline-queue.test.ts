@@ -50,10 +50,12 @@ describe('offline-queue', () => {
     expect(id.length).toBeGreaterThan(0);
     const all = await listQueuedCaptures();
     expect(all).toHaveLength(1);
-    expect(all[0].id).toBe(id);
-    expect(all[0].tenantId).toBe('t1');
-    expect(all[0].attempts).toBe(0);
-    expect(typeof all[0].createdAt).toBe('string');
+    const first = all[0];
+    expect(first).toBeDefined();
+    expect(first!.id).toBe(id);
+    expect(first!.tenantId).toBe('t1');
+    expect(first!.attempts).toBe(0);
+    expect(typeof first!.createdAt).toBe('string');
   });
 
   it('listQueuedCaptures returns all queued items', async () => {
@@ -75,13 +77,15 @@ describe('offline-queue', () => {
     const id = await enqueueCapture(baseItem);
     await markCaptureFailure(id, 'network timeout');
     const [row] = await listQueuedCaptures();
-    expect(row.attempts).toBe(1);
-    expect(row.lastError).toBe('network timeout');
+    expect(row).toBeDefined();
+    expect(row!.attempts).toBe(1);
+    expect(row!.lastError).toBe('network timeout');
     // A second failure increments again.
     await markCaptureFailure(id, 'still down');
     const [row2] = await listQueuedCaptures();
-    expect(row2.attempts).toBe(2);
-    expect(row2.lastError).toBe('still down');
+    expect(row2).toBeDefined();
+    expect(row2!.attempts).toBe(2);
+    expect(row2!.lastError).toBe('still down');
   });
 
   it('markCaptureFailure is a no-op for an unknown id', async () => {
