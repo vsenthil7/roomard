@@ -11,6 +11,7 @@
  * the actual problem. This test exercises both fixes: the JSON parser AND the
  * status-code forwarding behaviour.
  */
+import { mintTestToken } from '@roomard/test-utils';
 import { request as undiciRequest } from 'undici';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
@@ -161,5 +162,72 @@ describe('api-gateway server (G-28 regression)', () => {
     // Edge identity headers are injected.
     expect(forwarded).toContain('x-request-id');
     expect(forwarded).toContain('x-roomard-edge');
+  });
+
+  it('authenticated GET proxies upstream and injects x-actor-id + x-actor-tenant', async () => {
+    undiciMock.mockClear();
+    const token = await mintTestToken({ roles: ['admin'] });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/guests',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ forwarded: true });
+    expect(undiciMock).toHaveBeenCalledTimes(1);
+    const headers = (undiciMock.mock.calls[0]![1] as { headers: Record<string, string> }).headers;
+    const lower: Record<string, string> = {};
+    for (const [k, v] of Object.entries(headers)) lower[k.toLowerCase()] = v;
+    // The gateway terminates auth and injects the actor identity for the upstream.
+    expect(lower['x-actor-id']).toBeDefined();
+    expect(lower['x-actor-tenant']).toBeDefined();
+  });
+
+  it('proxies upstream response headers and status through to the client', async () => {
+    undiciMock.mockClear();
+    undiciMock.mockResolvedValueOnce({
+      statusCode: 201,
+      headers: { 'content-type': 'application/json', 'x-upstream-marker': 'yes' },
+      body: {
+        async arrayBuffer() {
+          return new TextEncoder().encode(JSON.stringify({ created: true })).buffer;
+        },
+      },
+    } as never);
+    const token = await mintTestToken({ roles: ['admin'] });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/guests',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.headers['x-upstream-marker']).toBe('yes');
+    expect(res.json()).toEqual({ created: true });
+  });
+
+  it('returns 403 when the token lacks the required permission', async () => {
+    // front_desk_agent has guest.read but NOT guest.write — POST /v1/guests needs write.
+    const token = await mintTestToken({ roles: ['front_desk_agent'] });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/guests',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ displayName: 'X' }),
+    });
+    expect(res.statusCode).toBe(403);
+    expect((res.json() as { category?: string }).category).toBe('authorization');
+  });
+
+  it('returns 401 requireMfa for an MFA-gated route when the token is not MFA-verified', async () => {
+    // POST /v1/audit/export requires audit.read AND requireMfa. An admin token
+    // minted without mfaVerified should be rejected at the MFA gate.
+    const token = await mintTestToken({ roles: ['admin'] });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/export',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ from: '2026-01-01T00:00:00Z', to: '2026-12-31T23:59:59Z', reason: 'x' }),
+    });
+    expect(res.statusCode).toBe(401);
   });
 });
