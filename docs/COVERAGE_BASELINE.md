@@ -1,70 +1,99 @@
-# Coverage baseline — honest measurement after full enterprise lift
+# Coverage baseline — LOCKED (CP-76)
 
-**Date:** 2026-05-19 16:43 BST (after CP-1 through CP-19)
-**Node:** v24.14.1
-**pnpm:** 9.15.9
-**Method:** `pnpm -r --no-bail --filter "@roomard/*" run test:coverage`
-**Status:** **All 14 packages with tests now run cleanly. 121 tests passing. 0 failing.**
+**Date:** 2026-05-20 14:08 BST
+**Locked at commit:** the CP-76 commit on `origin/main` (https://github.com/vsenthil7/roomard)
+**Node:** v24.14.1 · **pnpm:** 9.15.9 · **Vitest:** 2.1.x (v8 coverage provider)
+**Method:** `pnpm -r --no-bail run test:coverage` — fresh full-workspace run, every figure below copied verbatim from the v8 `All files` summary line of that run (no estimates, no carried-over numbers).
+**Status:** **356 unit tests passing, 0 failing.** Plus **8 DB integration tests** that pass against a live Postgres when `DATABASE_URL` is set, and skip cleanly otherwise.
 
-## Per-package state — actual numbers
+This supersedes the CP-19 baseline (2026-05-19), which predated the entire CP-52→CP-74 coverage lift and is no longer representative.
 
-| # | Package | Tests | Stmts % | Branch % | Funcs % | Notes |
+---
+
+## Per-module measured coverage (exact, % statements)
+
+Sorted high → low. Branch and function percentages included for completeness; the CI gate is on statements.
+
+| # | Module | Stmts % | Branch % | Funcs % | Tests | Notes |
 |---|---|---|---|---|---|---|
-| 1 | `@roomard/logger` | 4/4 ✅ | **100** | 100 | 100 | Fully covered |
-| 2 | `@roomard/schemas` | 32/32 ✅ | **98.31** | 75 | 50 | Only `index.ts` barrel uncovered |
-| 3 | `@roomard/errors` | 16/16 ✅ | **92.38** | 78.43 | 94.73 | Some flexible-signature branches not exercised |
-| 4 | `@roomard/brief-svc` | 5/5 ✅ | **90.81** | 72.22 | 75 | pipeline.ts well-covered; lines 293-298, 337-351 uncovered |
-| 5 | `@roomard/guest-svc` | 7/7 ✅ | **76.11** | 48.07 | 72.72 | service.ts: search() and history() partly covered |
-| 6 | `@roomard/capture-svc` | 4/4 ✅ | **75** | 65.57 | 57.14 | object-store.ts mostly stubbed (S3 client not exercised) |
-| 7 | `@roomard/ingest-svc` | 8/8 ✅ | **50.31** | 68.75 | 40 | server.ts route handlers untested (verifyMewsSignature + ingestMewsReservation are covered) |
-| 8 | `@roomard/exception-svc` | 4/4 ✅ | **46.8** | 27.27 | 42.85 | Most server.ts route handlers untested |
-| 9 | `@roomard/auth-svc` | 5/5 ✅ | **33.09** | 77.27 | 41.17 | passwordLogin and lockout covered; MFA, refresh-rotation, password-change paths untested |
-| 10 | `@roomard/ai-gateway` | 10/10 ✅ | **29.97** | 60.6 | 83.33 | mock-provider 88%; qianfan-provider 0% (no test stub yet); index.ts (Fastify server) 0% |
-| 11 | `@roomard/tenant-svc` | 3/3 ✅ | **25.47** | 60 | 66.66 | Auth/permission rejection paths covered; CRUD route handlers untested |
-| 12 | `@roomard/audit-svc` | 7/7 ✅ | **25.22** | 64.28 | 33.33 | server.ts 0%; service.ts partially covered |
-| 13 | `@roomard/api-gateway` | 8/8 ✅ | **23.28** | 92.85 | 33.33 | routes.ts 82% (route table); server.ts 0% (proxy logic untested) |
-| 14 | `@roomard/web` | 8/8 ✅ | **10.68** | 56.81 | 45 | Only auth store + api.ts tested; 7 route components 0% |
-| 15 | `@roomard/db` | 0/7 ⊘ | 3.24 | 0 | 0 | Integration tests skipped (need live Postgres) |
+| 1 | `@roomard/logger` | **100** | 89.47 | 100 | 20 | Fully covered (incl. G-33 Sentry-forwarder fix, CP-57) |
+| 2 | `@roomard/schemas` | **98.31** | 75 | 50 | 32 | Only the `index.ts` barrel uncovered |
+| 3 | `@roomard/capture-svc` | **97.84** | 72.22 | 100 | 12 | object-store S3 paths covered via mocked client (CP-59) |
+| 4 | `@roomard/brief-svc` | **95.86** | 79.22 | 100 | 26 | Strong; prep-card + pipeline paths covered |
+| 5 | `@roomard/errors` | **93.8** | 83.33 | 100 | 22 | Some flexible-signature branches not exercised |
+| 6 | `@roomard/ai-gateway` | **91.31** | 76.74 | 97.14 | 45 | AiGateway facade index.ts 0→95 (CP-72); only the QianfanProvider env branch left |
+| 7 | `apps/web` | **89.28** | 79.35 | 81.57 | 39 | All 7 routes 84–100; only `main.tsx` bootstrap left (browser-only floor) |
+| 8 | `@roomard/ingest-svc` | **82.43** | 76.92 | 87.5 | 29 | Mews sync + review poller + webhook HMAC path covered |
+| 9 | `@roomard/guest-svc` | **81.6** | 62.5 | 78.57 | 20 | search/history/trajectory covered |
+| 10 | `@roomard/auth-svc` | **81.46** | 83 | 86.36 | 32 | Refresh rotation added (CP-73); mfa-verify success body needs live TOTP |
+| 11 | `@roomard/tenant-svc` | **81.13** | 86.36 | 66.66 | 14 | CRUD handlers covered; only `start()` left |
+| 12 | `@roomard/api-gateway` | **79.31** | 84.74 | 57.14 | 18 | authed-proxy + RBAC covered; validation branch + `start()` left |
+| 13 | `@roomard/exception-svc` | **77.65** | 76.74 | 87.5 | 15 | PATCH success + cursor round-trip covered |
+| 14 | `@roomard/audit-svc` | **75.11** | 62.85 | 62.5 | 19 | G-37 fixed (CP-74); verifyChain re-derives hash in SQL |
+| — | `@roomard/db` | 3.24 (unit) | 0 | 0 | **8 integration** | Integration-gated — see below |
+| — | `@roomard/service-framework` | (not measured) | — | — | 13 | No `test:coverage` script in this package |
 
-**Totals**: 121 tests passing, 0 failing, 7 skipped (db integration — DB-dependent).
+**Unweighted mean across the 14 measured modules: 87.51%** (min 75.11, max 100). **11 of 14 modules ≥ 80%; 6 of 14 ≥ 90%.**
 
-## Aggregate coverage analysis (honest)
+> **Aggregate caveat (honest):** The figure above is the simple mean of per-module percentages. The CI coverage gate aggregates by **statements weighted per module**, which this baseline does not recompute because the workspace is configured for vitest's text reporter only (no `coverage-summary.json` is emitted to sum raw statement counts across packages). The per-module percentages are exact; the single weighted aggregate is not asserted here rather than be fabricated. To produce a precise weighted figure, add the `json-summary` reporter to each `vitest.config` and sum `total.statements` across packages.
 
-The CI gate aggregates across all packages weighted by total statements per package. Rough estimate (weighted by visible source line counts):
+---
 
-- Heavy hitters with low coverage (server.ts files ≈ 100-225 lines each, mostly 0%): api-gateway server.ts (225), exception server.ts (230), audit server.ts (111), ingest server.ts (224), tenant server.ts (149), web routes (~1100 total lines)
-- Light-but-high coverage: schemas, logger, errors (small files at 90%+)
+## The DB package — integration-gated, not "uncovered"
 
-**Realistic aggregate**: ~35-45%. The 90% CI gate will fail on every push until either (a) the server.ts/routes test layers are added, or (b) the gate is tuned down to a per-package floor + aggregate target.
+`@roomard/db`'s unit run reports 3.24% because its real exercise is the **integration suite**, which is gated on `DATABASE_URL`:
 
-## What changed between v1 baseline and now
+- Run with `set DATABASE_URL=postgres://roomard:roomard_dev_pwd@127.0.0.1:5532/roomard&&` (use `127.0.0.1`, **not** `localhost` — Node on Windows resolves `localhost` to IPv6 `::1` first and stalls the container TCP path).
+- **8 tests pass:** 4 RLS isolation + 4 audit hash-chain, against the live container Postgres.
+- Without `DATABASE_URL` they skip cleanly (so a no-DB CI run is still green).
 
-The previous (now-superseded) baseline at commit `a3b228b` claimed "0% overall" — that was wrong because the pnpm `--bail` killed the queue after schemas crashed and my lcov regex didn't parse v8's stub format. This v2 baseline (this doc) reflects reality after all CP-1..CP-19 fixes.
+These tests are where G-34 (schema drift), G-35 (SET-bind-param production bug), G-36 (superuser-bypasses-RLS security gap), and the lead for G-37 (audit schema drift) were all found. The line-coverage number understates the value: the tenant-context, RLS, and audit-chain code paths are genuinely exercised end to end.
 
-## Outstanding G-issues (live)
+---
 
-See `docs/TRACEABILITY.md` for the canonical list. As of 2026-05-19 16:43 BST:
+## Legitimate coverage floors (flagged honestly, NOT padded)
 
-| Status | Count | IDs |
-|---|---|---|
-| ✅ FIXED | 14 | G-1, G-2, G-4, G-6, G-7, G-8, G-9, G-10, G-11, G-12, G-13, G-14, G-15, G-16 |
-| ❌ INVALID | 1 | G-5 (false alarm) |
-| ❌ OPEN | 1 | G-3 (docker-compose lacks service blocks — pending CP) |
+These cannot reach 100% without external infrastructure, and are deliberately left rather than faked:
 
-## Next CPs to lift coverage to honest ≥90% aggregate
+- **Every service's `start()`** — binds a port and calls `app.listen`; needs a live listener, not a unit test.
+- **`apps/web/main.tsx`** — ReactDOM mount + PWA service-worker registration; runs only in a real browser.
+- **auth-svc mfa-verify success body** — needs a live TOTP code to pass `authenticator.verify`.
+- **ai-gateway QianfanProvider constructor branch** — needs real `QIANFAN_*` env to instantiate the live provider.
+- **audit-svc verifyChain full chain** — partially de-risked by the db audit-chain integration test; full coverage wants a long real linked chain.
 
-Smallest-effort-first per CLAUDE_RULES:
+---
 
-- **CP-20**: web — write at least 1 test per route component (Login, Brief, Captures, Guests, Exceptions). Should lift web from 10.68% to ~50%.
-- **CP-21**: api-gateway server.ts — supertest-based end-to-end through the gateway with mocked upstreams. Lifts from 23% to ~70%.
-- **CP-22**: exception, audit, tenant, ingest server.ts — same supertest pattern. Lifts each from ~25-50% to ~80%.
-- **CP-23**: auth — cover MFA, refresh, password change paths. Lifts from 33% to ~80%.
-- **CP-24**: ai-gateway — qianfan-provider tests with mocked Qianfan API. Lifts from 30% to ~75%.
-- **CP-25**: capture object-store — mock S3 client tests. Lifts capture from 75% to ~90%.
-- **CP-26**: db — start `docker compose up postgres` in test setup, unblock 7 skipped integration tests.
-- **CP-27**: re-run, verify aggregate ≥90%, declare baseline locked.
-- **CP-28**: G-3 — services and web in docker-compose, per user's "everything in docker" requirement.
+## Bug findings during the lift (cross-reference)
 
-## Raw test count summary
+The canonical ledger is `docs/TRACEABILITY.md`. The lift toward this baseline surfaced **three production-grade bugs invisible to the mocked unit suite**, plus one security finding — the direct payoff of chasing real coverage and live-DB integration rather than padding:
 
-Across all 14 testing packages: **121 unit tests + 7 skipped integration tests = 128 total**. Zero failures.
+| ID | Severity | What | Found via | Fixed |
+|---|---|---|---|---|
+| G-33 | Functional | Sentry error-forwarder was dead code (pino `logMethod` gate never matched) | writing logger tests | CP-57 |
+| G-35 | Production | `SET LOCAL app.x = $1` rejected by Postgres → every `withTenantContext` call fails on real PG | db integration | CP-69 |
+| G-37 | Production | audit service queried non-existent columns (`hash`/`resource_type`) → query + verify endpoints 500 | live-schema check | CP-74 |
+| G-36 | Security | app DB role is superuser + BYPASSRLS → RLS silently not enforced | db integration | OPEN (infra) |
+
+**Score: 38 fixed, 1 invalid (G-5), 1 open (G-36 — infra/provisioning).**
+
+---
+
+## How to reproduce this baseline
+
+```
+# Full workspace coverage (unit)
+pnpm -r --no-bail run test:coverage
+
+# DB integration suite (needs the postgres container up on host port 5532)
+set DATABASE_URL=postgres://roomard:roomard_dev_pwd@127.0.0.1:5532/roomard&& pnpm --filter @roomard/db run test
+```
+
+Each module's percentage is the `All files` line of its own coverage run. service-framework is excluded (no coverage script). db's headline is the integration-test pass count, not the unit line-coverage.
+
+---
+
+## Remaining roadmap (from TRACEABILITY.md)
+
+- **CP-77** — (infra) G-36 remediation: provision the production app DB role as `NOSUPERUSER NOBYPASSRLS` so RLS actually enforces.
+- **CP-78** — (optional) lift the remaining mid-70s unit-testable branches in exception / guest / ingest / audit.
+- Deferred (need external resources): deployable URL (Qianfan keys, Mews tenant, DNS/TLS/secrets), real SSO IdP, GDPR subject-access/erasure, second PMS connector, real commercial review-API adapters, web bundle code-splitting.
