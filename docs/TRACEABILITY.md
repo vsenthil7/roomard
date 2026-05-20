@@ -2,22 +2,24 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 13:19 BST (CP-75)
+**Last updated:** 2026-05-20 14:08 BST (CP-77)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 356 passing, 0 failing (workspace unit suites); **+8 DB integration tests** passing with `DATABASE_URL` set
+**Total tests:** 356 passing, 0 failing (workspace unit suites); **12 DB integration tests** passing with `DATABASE_URL` set (8→12 at CP-77 — the G-36 remediation verification)
 
 ---
 
-## Session timeline (CP-1 → CP-75)
+## Session timeline (CP-1 → CP-77)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 75 total since session start)
+### Commits landed (newest → oldest, 77 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-75 | [DOCS] | Traceability live through CP-74 — the mid-70s service lift + a third schema-drift fix. Records CP-72 (ai-gateway facade, 75→91%), CP-73 (auth refresh rotation, 75→82%), CP-74 (**G-37** audit schema-drift production fix). Score 38 fixed, 1 invalid, 1 open (G-36). | ✅ |
+| `5580a49` | CP-77 | [FIX] | **G-36** remediation (closes the last open issue) — RLS is FORCED on every tenant table but the app connected as the superuser/BYPASSRLS `roomard` role, so isolation was silently unenforced. Migration **0017** creates `roomard_app` (LOGIN NOSUPERUSER NOBYPASSRLS) with exactly the needed grants; REVOKEs UPDATE/DELETE on `audit_events` (append-only); production points `DATABASE_URL` at it (password via secrets manager), migrations keep using the bootstrap role. **Proven live:** as `roomard_app`, no tenant context → 0 guests, tenant 0001 → 24, empty tenant → 0. +4 db integration tests. | ✅ live PG |
+| `b23764b` | CP-76 | [DOCS] | Locked the coverage baseline in `COVERAGE_BASELINE.md` (replaces the stale CP-19 version). Fresh full-workspace `test:coverage` run; every per-module % copied verbatim. Unweighted mean **87.51%** across 14 measured modules (11 ≥ 80, 6 ≥ 90); honest caveat that the statement-weighted CI aggregate isn't recomputed (text reporter only). | ✅ |
+| `ec9b514` | CP-75 | [DOCS] | Traceability live through CP-74 — the mid-70s lift + a third schema-drift fix. Records CP-72 (ai-gateway 75→91%), CP-73 (auth 75→82%), CP-74 (**G-37**). Score 38 fixed, 1 invalid, 1 open. | ✅ |
 | `2d13181` | CP-74 | [FIX] | **G-37** (production bug) — audit service written against an imagined `audit_events` schema (`hash`/`resource_type`/`payload_hash`/`actor_label`); real cols are `event_hash`/`resource_kind`/`detail`/`actor_display`. `SELECT hash` and `WHERE resource_type` both error against live PG — the audit query + verify-chain endpoints would 500 in production. Aligned `AuditRow`; rewrote `verifyChain` to re-derive the hash IN SQL (exact migration-0011 recipe via LAG window) so it byte-matches the trigger; `queryEvents` filter → `resource_kind`. Validated against live PG (45/45 seed chain rows verify). audit 16→19 tests. | ✅ live PG |
 | `9ce873a` | CP-73 | [FEAT] | auth refresh-rotation server tests — the existing suite covered login/mfa/me/logout + refresh-401 but never the rotation success path. Added refresh-success (drives FOR UPDATE select → buildSession → issueTokensWithinTx → new-token INSERT + replaced_by UPDATE) + refresh-revoked-reuse-detection. auth 30→32 tests; **74.6→81.5%** (server.ts 63→73, service.ts 79→85). | ✅ |
 | `c4d20ee` | CP-72 | [FEAT] | ai-gateway `AiGateway` facade tests — index.ts was 0% (real orchestration, not a floor). Added test-utils dep; covers provider selection (mock/override), invoke success+failure logging path, per-minute + daily cap enforcement (RateLimitError), `gatewayConfigFromEnv`. ai-gateway 37→45 tests; **75.0→91.3%** (index.ts 0→95). | ✅ |
@@ -94,7 +96,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-37)
+## Bugs discovered & status (G-1 through G-37) — ALL CLOSED
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -117,12 +119,12 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-33 | logger Sentry forwarder was **dead code** — the pino `logMethod` hook gated forwarding on `method.name === 'error'/'fatal'`, but pino always passes `method.name === "LOG"` and supplies the numeric level as the hook's THIRD argument. So the condition never matched and the entire Sentry error-forwarding integration (built in CP-42) had never fired in any environment. Found while writing tests to lift logger off 38.7%. Fixed to gate on `level >= 50` (error=50, fatal=60). | ✅ FIXED | CP-57 |
 | G-34 | DB integration tests carried **schema drift** — written against an imagined schema and never run (skipped on missing `DATABASE_URL`), so the drift was invisible. Real mismatches: tenant seed used `legal_name` (real col `name`) and tier `'starter'` (invalid; enum is `property/group_starter/group/enterprise`); audit assertions used `hash`/`resource_type` (real cols `event_hash`/`resource_kind`); `operation` for an insert is `'create'` not `'insert'`; `event_hash` is `bytea` (32 raw bytes, not 64 hex chars) so Buffer comparison needs `toStrictEqual`; request IDs were non-UUID strings but the GUC + `assertUuid` require UUIDs. All corrected to match the real schema. | ✅ FIXED | CP-70 |
 | G-35 | (PRODUCTION BUG) `tenant-context.applyContext` set the per-transaction RLS/audit GUCs with `SET LOCAL app.x = $1` using **bind parameters** — but Postgres `SET`/`SET LOCAL` only accept literals, not `$1`, so every statement throws `syntax error at or near "$1"` against a real server. This means **every** `withTenantContext`/`withReadOnlyTenantContext` call (the wrapper all tenant-scoped reads/writes use) would have failed at runtime against real Postgres. Stayed latent because the entire unit suite uses `createFakePool`, which never parses SET syntax; the live login path (CP-50) worked only because `buildSession` uses raw pool queries, not the wrapper. Fixed to `SELECT set_config($1,$2,$3)` (the parameterisable function form; `is_local` mirrors SET LOCAL). The `withReadOnlyTenantContext` cleanup path already used `set_config` — this aligns the apply path with it. Surfaced only by running the db integration tests against live Postgres. | ✅ FIXED | CP-69 |
-| G-36 | (SECURITY / PROVISIONING) RLS is enabled **and FORCED** on `guests` (`relrowsecurity=t, relforcerowsecurity=t`), but the app's `roomard` DB role is `rolsuper=t, rolbypassrls=t` — a superuser with BYPASSRLS **ignores RLS entirely, even under FORCE**. So in the dev/CI container, multi-tenant RLS isolation is **not actually enforced**. The RLS test was rewritten to provision a restricted `roomard_rls_test` role (NOSUPERUSER NOBYPASSRLS) and prove isolation genuinely through it, plus a test that documents the current bypass. **Remediation is an infra/provisioning change**: the application must connect to production Postgres as a non-superuser, non-BYPASSRLS role, or RLS provides no protection. | 🔶 OPEN (infra) | — |
+| G-36 | (SECURITY / PROVISIONING) RLS is enabled **and FORCED** on `guests` (`relrowsecurity=t, relforcerowsecurity=t`), but the app's `roomard` DB role is `rolsuper=t, rolbypassrls=t` — a superuser with BYPASSRLS **ignores RLS entirely, even under FORCE**. So in the dev/CI container, multi-tenant RLS isolation was **not actually enforced**. **Remediated CP-77:** migration 0017 creates `roomard_app` (LOGIN NOSUPERUSER NOBYPASSRLS) with exactly the grants the services need (and UPDATE/DELETE revoked on append-only `audit_events`); production connects as this role (password via secrets manager), migrations/ops keep the privileged bootstrap role. Proven live: as `roomard_app`, no tenant context → 0 guests, tenant A → only tenant-A rows, empty tenant → 0. 4 db integration tests verify the role attributes + isolation. | ✅ FIXED | CP-77 |
 | G-37 | (PRODUCTION BUG) The **audit service** (`services/audit/src/service.ts`) was written against an IMAGINED `audit_events` schema — its `AuditRow`, `computeHash`, and the verify/query SQL referenced `hash`, `resource_type`, `payload_hash`, `actor_label`. The REAL columns (migration 0011) are `event_hash` (bytea), `resource_kind`, `actor_display`, `detail` (jsonb) — and there is **no** `payload_hash`. Proven against the live DB: `SELECT hash FROM audit_events` → `column "hash" does not exist`; `SELECT resource_type` → same. So the audit query endpoint (`/v1/audit/events` with a `resourceType` filter) AND the verify-chain endpoint (`/v1/audit/verify`, `/export`) would **500 in production**. Same drift class as G-34, caught the same way — checking the service code against the live schema. Fixed: aligned `AuditRow` (`event_hash`/`previous_hash` typed as `Buffer`); rewrote `verifyChain` to re-derive each row's hash **in SQL** using the exact migration-0011 `audit_compute_hash` recipe (`digest(concat_ws('|', …, occurred_at::text, encode(prev,'hex')), 'sha256')`) via a `LAG` window — doing it in SQL is the only way to byte-match Postgres's `occurred_at::text` rendering, which the old JS `toISOString()` recompute never could; `queryEvents` filter → `resource_kind`. Validated against live PG: all 45 cleanly-seeded chain rows verify (`hash_ok` + `link_ok`); the 5 that don't are this session's own integration-test rapid cross-tenant inserts with ambiguous same-timestamp ordering — a test-data artefact the verifier correctly flags, not a recipe error. | ✅ FIXED | CP-74 |
 
-**Score: 38 fixed, 1 invalid (G-5), 1 open (G-36 — infra/provisioning, not a code defect).**
+**Score: 39 fixed, 1 invalid (G-5), 0 open.** Every functional and security finding from the audit is resolved; the security fix (G-36) is proven against the live database.
 
-The login path is now demonstrably working end to end on the live 15-container stack — a user can authenticate through the browser-facing nginx route and receive a working JWT that the gateway accepts on protected endpoints.
+The login path is demonstrably working end to end on the live 15-container stack, and tenant isolation is now genuinely enforced through the restricted `roomard_app` role (G-36, CP-77) rather than silently bypassed.
 
 ---
 
@@ -193,6 +195,7 @@ Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was*
 | 0001..0014 | Base schema (tenants, users, properties, guests, preferences, captures, briefs, exceptions, audit chain, ai_call_logs, reviews, prompts) | Initial codebase |
 | **0015_review_polling.sql** | `integrations.last_polled_at` column, `direct_feedback_intake` table | CP-40 |
 | **0016_prep_cards.sql** | `prep_card_status` enum, `housekeeping_prep_cards` table | CP-41 |
+| **0017_app_role.sql** | `roomard_app` application DB role (LOGIN NOSUPERUSER NOBYPASSRLS) + grants; REVOKE UPDATE/DELETE on `audit_events` — the **G-36** remediation so RLS actually enforces. Paired `.down.sql`. | CP-77 |
 
 ---
 
@@ -233,11 +236,13 @@ All functional bugs are closed and the login loop is verified live. Remaining wo
 | CP-72 | ai-gateway `AiGateway` facade tests (index.ts 0→95) | M | ✅ DONE (75→91%) |
 | CP-73 | auth refresh-rotation server tests | S | ✅ DONE (75→82%) |
 | CP-74 | **G-37** audit schema-drift production fix (verifyChain → SQL recompute) | M | ✅ DONE (live PG) |
-| CP-76 | Lock the measured baseline in `COVERAGE_BASELINE.md` (per-module %, the floors, the 8 db integration tests) | S | next |
-| CP-77 | (infra) **G-36** remediation — provision the app DB role as NOSUPERUSER NOBYPASSRLS so RLS enforces in the live stack | M | pending (infra) |
-| CP-78 | (optional) lift the remaining mid-70s unit-testable branches — exception/guest/ingest | M | optional |
+| CP-76 | Lock the measured baseline in `COVERAGE_BASELINE.md` | S | ✅ DONE (mean 87.51%) |
+| CP-77 | **G-36** remediation — migration 0017 `roomard_app` NOSUPERUSER NOBYPASSRLS role so RLS enforces | M | ✅ DONE (live PG) |
+| CP-78 | (optional) lift the remaining mid-70s unit-testable branches — exception/guest/ingest/audit | M | optional |
 
-Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
+**All G-issues are now closed** (39 fixed, 1 invalid, 0 open). The remaining roadmap is optional coverage polish + the externally-gated deferred items below.
+
+Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run). **Also:** migration 0017 creates the `roomard_app` role, but the docker-compose service env still points `DATABASE_URL` at the bootstrap `roomard` superuser — a follow-up should switch the *service* containers to `roomard_app` (keeping migrate/seed on the privileged role) so the live stack exercises RLS exactly as production will. The G-36 *fix* (the role + grants + proof) is done; this is the compose-wiring follow-through.
 
 Deferred (need external resources or sprint-length work, per the original code review §3 + the parallel-session CP-31 summary §4):
 - MeDo not used (strategic, requires product rebuild)
