@@ -312,28 +312,18 @@ export class AuthService {
   }
 
   private async buildSession(user: UserRow): Promise<AuthenticatedSession> {
-    // G-32 — roles.permissions is a jsonb OBJECT of { resource: [actions] }
-    // (e.g. { guests: ['read','write'], briefs: ['read'] }) or the admin shape
-    // { all: ['*'] }. The previous query used jsonb_array_elements_text() which
-    // only works on a jsonb ARRAY and threw "cannot extract elements from an
-    // object" (Postgres 22023) on every login. We now fetch the raw jsonb and
-    // flatten it in TypeScript into canonical `resource.action` permission
-    // strings, unioned with the static rolesToPermissions fallback so the two
-    // sources of truth (DB role definition + code map) agree.
-    const { rows: roleRows } = await this.pool.query<{ name: string; permissions: unknown }>(
-      `SELECT r.name, r.permissions
+    const { rows: roleRows } = await this.pool.query<{ name: string; permissions: string[] }>(
+      `SELECT r.name,
+              COALESCE((SELECT array_agg(p) FROM jsonb_array_elements_text(r.permissions::jsonb) AS p), ARRAY[]::text[]) AS permissions
        FROM user_roles ur
        INNER JOIN roles r ON r.id = ur.role_id
        WHERE ur.user_id = $1 AND (r.tenant_id = $2 OR r.tenant_id IS NULL)`,
       [user.id, user.tenant_id],
     );
     const roleNames = roleRows.map((r) => r.name);
-    // Start from the static role → permission map (canonical format).
+    // Union all explicit permissions from roles + fallback static mapping
     const perms = new Set<string>(rolesToPermissions(roleNames));
-    // Then fold in any explicit permissions stored on the role row itself.
-    for (const r of roleRows) {
-      for (const p of flattenRolePermissions(r.permissions)) perms.add(p);
-    }
+    for (const r of roleRows) for (const p of r.permissions) perms.add(p);
     return {
       userId: user.id,
       tenantId: user.tenant_id,
@@ -440,53 +430,6 @@ export class AuthService {
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
-}
-
-/**
- * Flatten a role's `permissions` jsonb into canonical `resource.action` strings.
- *
- * The roles table stores permissions as an object of resource → action[]:
- *   { guests: ['read','write'], briefs: ['read','annotate'] }
- * or the admin wildcard shape:
- *   { all: ['*'] }
- *
- * Enforcement (hasPermission) expects flat dotted strings like `guest.read`,
- * with `*` meaning all. This translates between the two. Notes:
- *  - Resource keys are singularised (guests → guest) to match the permission
- *    vocabulary used across the route tables and rolesToPermissions().
- *  - `all` or a `*` action collapses to the single `*` super-permission.
- *  - Already-flat array shapes (legacy) are passed through unchanged so this is
- *    safe even if a role is later stored as a plain string[].
- */
-export function flattenRolePermissions(raw: unknown): string[] {
-  if (raw === null || raw === undefined) return [];
-  // Legacy / defensive: a plain array of dotted strings.
-  if (Array.isArray(raw)) return raw.filter((p): p is string => typeof p === 'string');
-  if (typeof raw !== 'object') return [];
-
-  const out = new Set<string>();
-  for (const [resourceRaw, actions] of Object.entries(raw as Record<string, unknown>)) {
-    const resource = singularise(resourceRaw);
-    const actionList = Array.isArray(actions) ? actions : [actions];
-    for (const actionRaw of actionList) {
-      const action = typeof actionRaw === 'string' ? actionRaw : String(actionRaw);
-      if (resource === 'all' || action === '*') {
-        out.add('*');
-        continue;
-      }
-      out.add(`${resource}.${action}`);
-    }
-  }
-  return [...out];
-}
-
-/** Minimal English singulariser for the closed set of permission resources. */
-function singularise(resource: string): string {
-  if (resource === 'all') return 'all';
-  // Handle the handful of irregular/regular plurals used in role definitions.
-  if (resource.endsWith('ies')) return resource.slice(0, -3) + 'y'; // policies → policy
-  if (resource.endsWith('s')) return resource.slice(0, -1); // guests → guest
-  return resource;
 }
 
 // re-export for direct use

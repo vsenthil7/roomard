@@ -2,7 +2,7 @@ import type { RoomardPool } from '@roomard/db';
 import bcryptjs from 'bcryptjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { AuthService, authServiceConfigFromEnv } from '../../src/service.js';
+import { AuthService, authServiceConfigFromEnv, flattenRolePermissions } from '../../src/service.js';
 
 // bcryptjs is CommonJS — default-import + destructure for runtime ESM safety.
 const { hash } = bcryptjs;
@@ -194,5 +194,49 @@ describe('authServiceConfigFromEnv — production hardening', () => {
     process.env.JWT_SECRET = 'a'.repeat(48); // any non-default value
     const cfg = authServiceConfigFromEnv();
     expect(cfg.jwtSecret).toHaveLength(48);
+  });
+});
+
+describe('flattenRolePermissions (G-32)', () => {
+  it('flattens an object of resource->actions into canonical resource.action strings', () => {
+    const perms = flattenRolePermissions({
+      guests: ['read', 'write'],
+      briefs: ['read', 'annotate'],
+    });
+    expect(perms.sort()).toEqual(
+      ['brief.annotate', 'brief.read', 'guest.read', 'guest.write'].sort(),
+    );
+  });
+
+  it('collapses the admin { all: ["*"] } shape to a single * super-permission', () => {
+    expect(flattenRolePermissions({ all: ['*'] })).toEqual(['*']);
+  });
+
+  it('collapses any * action to * regardless of resource', () => {
+    expect(flattenRolePermissions({ compliance: ['*'] })).toEqual(['*']);
+  });
+
+  it('singularises regular and -ies plurals', () => {
+    const perms = flattenRolePermissions({ properties: ['read'], policies: ['read'] });
+    expect(perms.sort()).toEqual(['policy.read', 'property.read'].sort());
+  });
+
+  it('passes through a legacy flat string[] unchanged', () => {
+    expect(flattenRolePermissions(['guest.read', 'brief.write'])).toEqual([
+      'guest.read',
+      'brief.write',
+    ]);
+  });
+
+  it('returns [] for null, undefined, or non-object input', () => {
+    expect(flattenRolePermissions(null)).toEqual([]);
+    expect(flattenRolePermissions(undefined)).toEqual([]);
+    expect(flattenRolePermissions('nonsense')).toEqual([]);
+    expect(flattenRolePermissions(42)).toEqual([]);
+  });
+
+  it('deduplicates when multiple resources yield the same permission', () => {
+    const perms = flattenRolePermissions({ guests: ['read'], guest: ['read'] });
+    expect(perms).toEqual(['guest.read']);
   });
 });
