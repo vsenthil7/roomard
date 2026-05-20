@@ -61,11 +61,6 @@ export const ROUTES: RouteRule[] = [
   { method: 'GET', pathPattern: '/v1/properties/:propertyId/briefs/today', upstream: 'brief', requiredPermission: 'brief.read' },
   { method: 'GET', pathPattern: '/v1/briefs/:id', upstream: 'brief', requiredPermission: 'brief.read' },
 
-  // Prep cards (UC-09 — housekeeping)
-  { method: 'POST', pathPattern: '/v1/prep-cards/generate', upstream: 'brief', requiredPermission: 'brief.write' },
-  { method: 'GET', pathPattern: '/v1/properties/:propertyId/prep-cards/:prepDate', upstream: 'brief', requiredPermission: 'brief.read' },
-  { method: 'POST', pathPattern: '/v1/prep-cards/:id/complete', upstream: 'brief', requiredPermission: 'brief.write' },
-
   // Exception
   { method: 'GET', pathPattern: '/v1/exceptions', upstream: 'exception', requiredPermission: 'exception.read' },
   { method: 'GET', pathPattern: '/v1/exceptions/:id', upstream: 'exception', requiredPermission: 'exception.read' },

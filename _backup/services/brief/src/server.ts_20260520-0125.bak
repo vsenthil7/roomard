@@ -17,27 +17,10 @@ import {
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { request as undiciRequest } from 'undici';
-import { z } from 'zod';
 
 import { generateBrief, loadBriefById } from './pipeline.js';
-import {
-  generatePrepCardsForDate,
-  completePrepCard,
-  listPrepCards,
-} from './prep-cards.js';
 
 const log = createLogger({ name: 'brief-svc' });
-
-const PrepGenerateSchema = z.object({
-  propertyId: UuidSchema,
-  prepDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  force: z.boolean().optional(),
-  includeWarmNote: z.boolean().optional(),
-});
-
-const PrepCompleteSchema = z.object({
-  notes: z.string().max(2000).optional(),
-});
 
 interface BuildDeps {
   pool: RoomardPool;
@@ -121,72 +104,6 @@ export function buildServer(deps: BuildDeps): FastifyInstance {
       if (!detail) throw new NotFoundError('brief not found');
       reply(replyHttp, 200, detail);
     });
-  });
-
-  // ----------------------------------------------------------------------
-  // UC-09: Housekeeping prep cards.
-  // ----------------------------------------------------------------------
-
-  // POST /v1/prep-cards/generate — scheduled job triggers this D-1 of arrival.
-  // Body: { propertyId, prepDate?, force?, includeWarmNote? }
-  app.post('/v1/prep-cards/generate', async (req, replyHttp) => {
-    const principal = requirePrincipal(req);
-    requirePermission(principal, 'brief.write');
-    const body = PrepGenerateSchema.parse(req.body);
-    const prepDate = body.prepDate ?? new Date().toISOString().slice(0, 10);
-    const summary = await withPrincipalContext(deps.pool, req, (client) =>
-      generatePrepCardsForDate(
-        client,
-        { aiInvoke },
-        {
-          tenantId: principal.tenantId,
-          propertyId: body.propertyId,
-          prepDate,
-          requestId: String(req.id),
-          force: body.force ?? false,
-          includeWarmNote: body.includeWarmNote ?? true,
-        },
-      ),
-    );
-    reply(replyHttp, 201, summary);
-  });
-
-  // GET /v1/properties/:propertyId/prep-cards/:prepDate — housekeeper lists
-  // the cards they need to action today.
-  app.get('/v1/properties/:propertyId/prep-cards/:prepDate', async (req, replyHttp) => {
-    const principal = requirePrincipal(req);
-    requirePermission(principal, 'brief.read');
-    const params = req.params as { propertyId: string; prepDate: string };
-    const propertyId = UuidSchema.parse(params.propertyId);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(params.prepDate)) {
-      replyHttp.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'prepDate must be YYYY-MM-DD' },
-      });
-      return;
-    }
-    const cards = await withPrincipalContext(deps.pool, req, (client) =>
-      listPrepCards(client, { propertyId, prepDate: params.prepDate }),
-    );
-    reply(replyHttp, 200, { items: cards });
-  });
-
-  // POST /v1/prep-cards/:id/complete — housekeeper signs off a card.
-  app.post('/v1/prep-cards/:id/complete', async (req, replyHttp) => {
-    const principal = requirePrincipal(req);
-    requirePermission(principal, 'brief.write');
-    const id = UuidSchema.parse((req.params as { id: string }).id);
-    const body = PrepCompleteSchema.parse(req.body ?? {});
-    const result = await withPrincipalContext(deps.pool, req, (client) =>
-      completePrepCard(client, {
-        cardId: id,
-        userId: principal.userId,
-        notes: body.notes,
-      }),
-    );
-    if (!result.ok) {
-      throw new NotFoundError('prep card not found or already completed');
-    }
-    reply(replyHttp, 200, { ok: true });
   });
 
   return app;
