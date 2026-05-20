@@ -269,7 +269,7 @@ The CP-36..CP-42 integration of parallel-session work was driven by user request
 
 | Path | Purpose |
 |---|---|
-| `docs/AT-Hack0019_Claude_Roomard_*.md` | 10 design docs (CP-36) |
+| `docs/roomard_*.md` | 10 design docs (CP-36; renamed from `AT-Hack0019_Claude_Roomard_*` to `roomard_<doctype>.md` at CP-81) |
 | `docs/COVERAGE_BASELINE.md` | Honest coverage state |
 | `docs/TRACEABILITY.md` | THIS FILE — live record per CP |
 | `docs/adr/` | Architecture decision records |

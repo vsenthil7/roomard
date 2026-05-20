@@ -9,7 +9,7 @@ re-themed to Roomard and re-written with Roomard's real content + metrics from:
   - README.md
   - docs/TRACEABILITY.md
   - docs/COVERAGE_BASELINE.md
-  - docs/AT-Hack0019_Claude_Roomard_UseCaseCatalogue_*.md
+  - docs/roomard_usecasecatalogue.md
 
 Output (relative to roomard/ repo root):
   - submission_media/roomard-pitch-deck-{stamp}.pptx
