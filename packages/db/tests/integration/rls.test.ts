@@ -182,3 +182,97 @@ describeOrSkip('RLS isolation', () => {
     }
   });
 });
+
+/**
+ * G-36 REMEDIATION verification (migration 0017).
+ *
+ * Migration 0017 creates the permanent `roomard_app` role (LOGIN, NOSUPERUSER,
+ * NOBYPASSRLS) that production is meant to connect as. These tests prove the
+ * remediation is real: the role has the correct security attributes AND RLS
+ * genuinely isolates tenants through it. They self-skip if 0017 hasn't been
+ * applied yet (so a partially-migrated DB doesn't fail the suite), and are
+ * additionally gated on DATABASE_URL like the rest of this file.
+ */
+const APP_ROLE = 'roomard_app';
+const APP_ROLE_PWD = 'roomard_app_dev_pwd'; // the dev placeholder from migration 0017
+
+describeOrSkip('G-36 remediation — roomard_app role (migration 0017)', () => {
+  let raw: Pool;
+  let appPool: RoomardPool | null = null;
+  let roleExists = false;
+
+  beforeAll(async () => {
+    raw = new Pool({ connectionString: process.env.DATABASE_URL });
+    const { rows } = await raw.query<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS exists`,
+      [APP_ROLE],
+    );
+    roleExists = rows[0]?.exists ?? false;
+    if (roleExists) {
+      const u = new URL(process.env.DATABASE_URL!);
+      u.username = APP_ROLE;
+      u.password = APP_ROLE_PWD;
+      appPool = new RoomardPool({ connectionString: u.toString() });
+    }
+  });
+
+  afterAll(async () => {
+    if (appPool) await appPool.close();
+    await raw.end();
+  });
+
+  it('roomard_app is NOSUPERUSER and NOBYPASSRLS (RLS will actually apply)', async () => {
+    if (!roleExists) return; // 0017 not applied in this DB — skip the assertion.
+    const { rows } = await raw.query<{ rolsuper: boolean; rolbypassrls: boolean }>(
+      `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1`,
+      [APP_ROLE],
+    );
+    expect(rows[0]).toBeDefined();
+    expect(rows[0]!.rolsuper).toBe(false);
+    expect(rows[0]!.rolbypassrls).toBe(false);
+  });
+
+  it('roomard_app cannot UPDATE/DELETE audit_events (append-only privilege)', async () => {
+    if (!roleExists) return;
+    const { rows } = await raw.query<{ privilege_type: string }>(
+      `SELECT privilege_type FROM information_schema.role_table_grants
+       WHERE grantee = $1 AND table_name = 'audit_events'`,
+      [APP_ROLE],
+    );
+    const privs = rows.map((r) => r.privilege_type).sort();
+    expect(privs).toContain('INSERT');
+    expect(privs).toContain('SELECT');
+    expect(privs).not.toContain('UPDATE');
+    expect(privs).not.toContain('DELETE');
+  });
+
+  it('RLS isolates tenant A through the real roomard_app role', async () => {
+    if (!roleExists || !appPool) return;
+    const rows = await withTenantContext(
+      appPool,
+      {
+        tenantId: DEMO_TENANT_A,
+        userId: '00000000-0000-4000-8000-000000000100',
+        actorKind: 'user',
+        requestId: '00000000-0000-4000-8000-0000000aa003',
+      },
+      async (client) => {
+        const { rows } = await client.query<{ tenant_id: string }>(`SELECT tenant_id FROM guests`);
+        return rows;
+      },
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.tenant_id).toBe(DEMO_TENANT_A);
+  });
+
+  it('roomard_app with no app.tenant_id sees zero guests (RLS denies)', async () => {
+    if (!roleExists || !appPool) return;
+    const client = await appPool.connect();
+    try {
+      const { rows } = await client.query<{ id: string }>(`SELECT id FROM guests`);
+      expect(rows.length).toBe(0);
+    } finally {
+      client.release();
+    }
+  });
+});
