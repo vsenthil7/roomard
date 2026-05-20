@@ -11,6 +11,7 @@
  * the actual problem. This test exercises both fixes: the JSON parser AND the
  * status-code forwarding behaviour.
  */
+import { request as undiciRequest } from 'undici';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
 import { buildServer } from '../../src/server.js';
@@ -30,6 +31,8 @@ vi.mock('undici', () => ({
     },
   })),
 }));
+
+const undiciMock = vi.mocked(undiciRequest);
 
 describe('api-gateway server (G-28 regression)', () => {
   let app: ReturnType<typeof buildServer>;
@@ -124,5 +127,39 @@ describe('api-gateway server (G-28 regression)', () => {
     const body = res.json() as { code?: string; category?: string; status?: number };
     expect(body.code).toBe('not_found');
     expect(body.status).toBe(404);
+  });
+
+  it('G-29: hop-by-hop headers (expect, connection, etc) are stripped before forwarding', async () => {
+    undiciMock.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/password/login',
+      headers: {
+        'content-type': 'application/json',
+        expect: '100-continue',
+        connection: 'keep-alive',
+        'keep-alive': 'timeout=5',
+        'transfer-encoding': 'chunked',
+        'x-custom-keep': 'should-survive',
+      },
+      payload: JSON.stringify({ email: 'a@b.co', password: 'x' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(undiciMock).toHaveBeenCalledTimes(1);
+    const callArgs = undiciMock.mock.calls[0]![1] as { headers: Record<string, string> };
+    const forwarded = Object.keys(callArgs.headers).map((k) => k.toLowerCase());
+    // The hop-by-hop set must NOT have been forwarded — forwarding `expect`
+    // in particular made undici throw UND_ERR_NOT_SUPPORTED (the 500 in G-29).
+    expect(forwarded).not.toContain('expect');
+    expect(forwarded).not.toContain('connection');
+    expect(forwarded).not.toContain('keep-alive');
+    expect(forwarded).not.toContain('transfer-encoding');
+    expect(forwarded).not.toContain('host');
+    expect(forwarded).not.toContain('content-length');
+    // Non-hop-by-hop custom headers MUST still be forwarded.
+    expect(forwarded).toContain('x-custom-keep');
+    // Edge identity headers are injected.
+    expect(forwarded).toContain('x-request-id');
+    expect(forwarded).toContain('x-roomard-edge');
   });
 });

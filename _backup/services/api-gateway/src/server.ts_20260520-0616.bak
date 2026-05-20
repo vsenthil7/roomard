@@ -34,24 +34,6 @@ import { matchRoute, upstreamsFromEnv, type Upstreams } from './routes.js';
 
 const log = createLogger({ name: 'api-gateway' });
 
-// G-29 — hop-by-hop headers (RFC 7230 §6.1) plus headers the upstream HTTP
-// client (undici) must recompute or rejects outright. Stripped before forwarding
-// to upstreams. `expect` in particular (100-continue) makes undici throw
-// UND_ERR_NOT_SUPPORTED. Hoisted to module scope so it isn't reallocated per request.
-const HOP_BY_HOP_HEADERS = new Set([
-  'host',
-  'content-length',
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-  'expect',
-]);
-
 interface BuildDeps {
   upstreams: Upstreams;
   rateLimitMax: number;
@@ -161,12 +143,10 @@ export function buildServer(deps: BuildDeps) {
     const upstreamBaseUrl = deps.upstreams[rule.upstream];
     const upstreamUrl = `${upstreamBaseUrl}${req.url}`;
 
-    // Forward. G-29 fix — strip hop-by-hop headers (RFC 7230 §6.1) plus a few
-    // that the upstream HTTP client (undici) rejects or must recompute itself.
-    // See HOP_BY_HOP_HEADERS at module scope for the full rationale.
+    // Forward
     const upstreamHeaders: Record<string, string> = {};
     for (const [k, v] of Object.entries(req.headers)) {
-      if (HOP_BY_HOP_HEADERS.has(k.toLowerCase())) continue;
+      if (k === 'host' || k === 'content-length') continue;
       if (Array.isArray(v)) upstreamHeaders[k] = v.join(',');
       else if (typeof v === 'string') upstreamHeaders[k] = v;
     }
