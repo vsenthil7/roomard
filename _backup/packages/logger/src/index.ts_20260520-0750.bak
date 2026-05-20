@@ -16,12 +16,6 @@
 import { pino, stdSerializers, stdTimeFunctions, type Logger as PinoLogger, type LoggerOptions } from 'pino';
 import { request as undiciRequest } from 'undici';
 
-// pino numeric level values — the logMethod hook receives the numeric level as
-// its THIRD argument (not via method.name, which is always "LOG"). error=50,
-// fatal=60. See G-33: the previous code keyed off method.name and so NEVER
-// forwarded anything to Sentry.
-const LEVEL_ERROR = 50;
-
 export interface CreateLoggerOptions {
   name: string;
   level?: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
@@ -67,17 +61,12 @@ export function createLogger(opts: CreateLoggerOptions): Logger {
       error: stdSerializers.err,
     },
     hooks: {
-      logMethod(this: PinoLogger, args: unknown[], method, level) {
+      logMethod(this: PinoLogger, args: unknown[], method) {
         // Tap into error/fatal calls and forward to Sentry asynchronously.
         // Forwarding failures must never crash the calling code, so we
         // catch + drop any errors from the forwarder.
-        //
-        // G-33: pino passes the numeric level as the third arg; method.name is
-        // always "LOG", so the old `method.name === 'error'` check never matched
-        // and the Sentry forwarder was dead code. We now gate on level >= 50
-        // (error=50, fatal=60) and resolve the label for the event payload.
-        if (typeof level === 'number' && level >= LEVEL_ERROR) {
-          const lvl = level >= 60 ? 'fatal' : 'error';
+        const lvl = method.name as string | undefined;
+        if (lvl === 'error' || lvl === 'fatal') {
           void forwardToSentry({
             level: lvl,
             service: opts.name,
