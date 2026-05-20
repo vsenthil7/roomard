@@ -2,22 +2,24 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 07:42 BST (CP-51)
+**Last updated:** 2026-05-20 08:16 BST (CP-53)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 228 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 250 passing, 0 failing, 7 skipped (DB integration)
 
 ---
 
-## Session timeline (CP-1 → CP-51)
+## Session timeline (CP-1 → CP-53)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 51 total since session start)
+### Commits landed (newest → oldest, 53 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-51 | [DOCS] | Traceability live through CP-50 — records the **login-loop breakthrough**: G-31✅ (DB provisioned: 16 migrations + seed applied to container Postgres), G-32✅ (auth `buildSession` permission-shape bug), and G-24✅ (nginx 502 resolved as a downstream symptom of G-28/G-29). Full chain verified live: `POST /v1/auth/password/login` → 200 + 317-char JWT; `/v1/auth/me` with Bearer → 200; `web:8180/api/v1/auth/...` browser path → 200. 15/15 containers healthy, 228 workspace tests green. Score 33 fixed, 1 invalid, 0 functional open. | ✅ |
+| (this) | CP-53 | [DOCS] | Traceability live through CP-52 — records the server-level supertest coverage push and the `createFakePool` test-utils helper. Workspace 228→250 tests. No new G-issues. | ✅ |
+| `0ea1ce3` | CP-52 | [FEAT] | Server-level supertests for tenant/audit/exception — closes the exact test gap that hid the G-28→G-32 cascade (these services had only logic tests, never exercised `buildServer` through HTTP). New reusable `createFakePool` in test-utils (satisfies the `connect`→`BEGIN`→`SET LOCAL`→query→`COMMIT` sequence; substring-matched row rules). New `server.test.ts` per service via `app.inject` + `mintTestToken`: /health, 401-no-token, 200-happy, JSON-not-415, 403-insufficient-perm, 404-envelope. tenant 3→10, audit 7→14, exception 4→12 (+22). Lint 0/0. | ✅ |
+| `12c4567` | CP-51 | [DOCS] | Traceability live through CP-50 — records the **login-loop breakthrough**: G-31✅ (DB provisioned: 16 migrations + seed applied to container Postgres), G-32✅ (auth `buildSession` permission-shape bug), and G-24✅ (nginx 502 resolved as a downstream symptom of G-28/G-29). Full chain verified live: `POST /v1/auth/password/login` → 200 + 317-char JWT; `/v1/auth/me` with Bearer → 200; `web:8180/api/v1/auth/...` browser path → 200. 15/15 containers healthy, 228 workspace tests green. Score 33 fixed, 1 invalid, 0 functional open. | ✅ |
 | `b8ab5c1` | CP-50 | [FIX] | G-31 (provisioning) applied all 16 migrations + seed to the container Postgres (demo tenant `demo`, 3 users incl. `admin@demo.roomard.local` / `Roomard123!`, 6 roles, property, sample guests). G-32 (code bug) `buildSession` used `jsonb_array_elements_text` on a jsonb *object* → Postgres 22023 on every login. Fixed with exported `flattenRolePermissions` (object-of-arrays → canonical `resource.action`; singularises plurals; collapses `all`/`*` → `*`; legacy array passthrough; safe on null/non-object). +7 unit tests (auth 9→16). Lint 0/0. | ✅ unit + live |
 | `b9328a5` | CP-49 | [DOCS] | Traceability live through CP-48 — recorded G-28/G-29/G-30 fixes, ticketed G-31; score 30 fixed/1 invalid/2 open; key learning re live-stack vs mocked tests. | ✅ |
 | `7d3f691` | CP-48 | [FIX] | G-30 auth-svc routes missing `/v1` prefix — the gateway forwards the full inbound URL (`/v1/auth/...`) unchanged and every other service uses `/v1/`, but auth-svc registered at `/auth/...` with publicPaths also lacking `/v1`. Framework preHandler then demanded a Bearer token on the login endpoint itself — a chicken-and-egg lockout. Aligned all 7 auth routes + 5 publicPaths to `/v1/auth/...`. 9/9 auth tests pass (service-level, no path churn). | ✅ unit + live |
@@ -124,11 +126,11 @@ From BRD §6.2 — original wedge of 8 use cases:
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
 | 7 packages | ✅ green | ✅ 78 tests (errors 22, logger **11**, schemas 32, framework 13, others) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 142 tests (ai-gateway **37**, ingest **21**, brief **17**, **auth 16**, **api-gateway 14**, guest **12**, audit 7, capture 4, exception 4, tenant 3) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 164 tests (ai-gateway **37**, ingest **21**, brief **17**, **auth 16**, **audit 14**, **api-gateway 14**, **exception 12**, guest **12**, **tenant 10**, capture 4) | ✅ 0 errors |
 | apps/web | ✅ green | ✅ 8 tests | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **228 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| **Workspace total** | **19/19 green** | **250 passing, 0 failing, 7 skipped** | **0 lint errors** |
 
-**Delta:** +17 tests since CP-49 (api-gateway G-29 ×1; auth `flattenRolePermissions` ×7; plus prior server.test.ts additions). No regressions from the G-32 auth change — full workspace re-run green.
+**Delta:** +22 tests since CP-51 (CP-52 server-level supertests: tenant +7, audit +7, exception +8). The three services that previously had no HTTP-layer test now exercise `buildServer` end to end — the gap that hid the G-28→G-32 cascade is closed for them.
 
 ---
 
@@ -162,12 +164,13 @@ With all functional bugs closed and the login loop verified live, the remaining 
 
 | CP | Target | Effort |
 |---|---|---|
-| CP-52 | apps/web — 1 test per route component (incl. the new `/prep-cards` route) | M |
-| CP-53 | exception, audit, tenant server.ts — server-level supertest pattern (the gap that hid G-28/G-29/G-30) | L |
-| CP-54 | capture object-store — mock S3 client tests | S |
-| CP-55 | db — postgres in test setup, unblock 7 skipped integration tests | M |
-| CP-56 | api-gateway — broaden server.test.ts upstream-proxy coverage | M |
-| CP-57 | Verify aggregate ≥90%, declare baseline locked | S |
+| ~~CP-52~~ | ~~exception, audit, tenant server.ts — server-level supertest pattern~~ | ✅ DONE (CP-52, +22 tests) |
+| CP-54 | guest, brief, ingest server.ts — extend the `createFakePool` + `app.inject` pattern to the remaining services that lack HTTP-layer tests | M |
+| CP-55 | apps/web — 1 test per route component (incl. the new `/prep-cards` route) | M |
+| CP-56 | capture object-store — mock S3 client tests | S |
+| CP-57 | db — postgres in test setup, unblock 7 skipped integration tests | M |
+| CP-58 | api-gateway — broaden server.test.ts upstream-proxy coverage | M |
+| CP-59 | Verify aggregate ≥90%, declare baseline locked | S |
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
