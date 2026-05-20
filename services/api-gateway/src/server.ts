@@ -76,6 +76,22 @@ export function buildServer(deps: BuildDeps) {
     },
   });
 
+  // G-28 fix — the gateway forwards raw body bytes to upstreams, so we register
+  // an application/json content-type parser that buffers the body untouched.
+  // Without this, Fastify 5's catch-all `app.route({ url: '/v1/*' })` registrations
+  // have no parser for application/json content-types and Fastify throws
+  // FST_ERR_CTP_INVALID_MEDIA_TYPE (statusCode 415) before reaching the handler.
+  // The error handler below ALSO forwards err.statusCode for FastifyError instances
+  // so the 415 (or any other Fastify-thrown status) propagates rather than being
+  // masked as a generic 500.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (_req, body, done) => {
+      done(null, body);
+    },
+  );
+
   // Health endpoints (no auth)
   app.get('/health', async () => ({ status: 'ok', service: 'api-gateway' }));
   app.get('/ready', async () => ({ status: 'ready' }));
@@ -190,6 +206,29 @@ export function buildServer(deps: BuildDeps) {
     if ((err as { validation?: unknown }).validation) {
       const message = err instanceof Error ? err.message : 'validation error';
       reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message, requestId: String(req.id) } });
+      return;
+    }
+    // G-28 fix — forward FastifyError statusCode rather than masking as 500.
+    // Without this, a FST_ERR_CTP_INVALID_MEDIA_TYPE (415) thrown by the
+    // content-type parser before the handler runs, an FST_ERR_VALIDATION (400),
+    // or any other Fastify-thrown error with a meaningful statusCode would
+    // surface to clients as a generic 500 INTERNAL with no actionable detail.
+    const fastifyErr = err as { code?: string; statusCode?: number; message?: string };
+    if (
+      typeof fastifyErr.code === 'string' &&
+      fastifyErr.code.startsWith('FST_') &&
+      typeof fastifyErr.statusCode === 'number' &&
+      fastifyErr.statusCode >= 400 &&
+      fastifyErr.statusCode < 500
+    ) {
+      log.warn({ err, reqId: req.id }, 'fastify client error');
+      reply.code(fastifyErr.statusCode).send({
+        error: {
+          code: fastifyErr.code,
+          message: fastifyErr.message ?? 'request rejected',
+          requestId: String(req.id),
+        },
+      });
       return;
     }
     log.error({ err, reqId: req.id }, 'unhandled error');
