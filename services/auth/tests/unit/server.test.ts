@@ -159,6 +159,86 @@ describe('auth-svc server', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('POST /v1/auth/refresh with a valid stored token rotates and returns 200 + new tokens', async () => {
+    const pwHash = await hash(PASSWORD, 4);
+    const future = new Date(Date.now() + 86_400_000);
+    const pool = createFakePool([
+      {
+        match: 'from refresh_tokens',
+        rows: [
+          {
+            id: '00000000-0000-4000-8000-0000000af001',
+            user_id: TEST_USER_ID,
+            tenant_id: TEST_TENANT_ID,
+            expires_at: future,
+            revoked_at: null,
+            replaced_by: null,
+          },
+        ],
+      },
+      {
+        match: 'from users',
+        rows: [
+          {
+            id: TEST_USER_ID,
+            tenant_id: TEST_TENANT_ID,
+            email: 'admin@demo.roomard.local',
+            password_hash: pwHash,
+            display_name: 'Demo Admin',
+            status: 'active',
+            mfa_secret: null,
+            locked_until: null,
+            failed_login_count: 0,
+          },
+        ],
+      },
+      { match: 'from user_roles', rows: [{ name: 'admin', permissions: { all: ['*'] } }] },
+    ]);
+    const auth = new AuthService(pool as unknown as RoomardPool, authServiceConfigFromEnv());
+    const refreshApp = buildServer({ pool: pool as unknown as RoomardPool, auth });
+    await refreshApp.ready();
+    const res = await refreshApp.inject({
+      method: 'POST',
+      url: '/v1/auth/refresh',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ refreshToken: 'rt_fake_pool_ignores_params' }),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { status?: string; tokens?: { access_token?: string } };
+    expect(body.status).toBe('success');
+    expect(typeof body.tokens?.access_token).toBe('string');
+    await refreshApp.close();
+  });
+
+  it('POST /v1/auth/refresh with a revoked token revokes the chain and returns 401', async () => {
+    const pool = createFakePool([
+      {
+        match: 'from refresh_tokens',
+        rows: [
+          {
+            id: '00000000-0000-4000-8000-0000000af002',
+            user_id: TEST_USER_ID,
+            tenant_id: TEST_TENANT_ID,
+            expires_at: new Date(Date.now() + 86_400_000),
+            revoked_at: new Date(Date.now() - 1000),
+            replaced_by: null,
+          },
+        ],
+      },
+    ]);
+    const auth = new AuthService(pool as unknown as RoomardPool, authServiceConfigFromEnv());
+    const revApp = buildServer({ pool: pool as unknown as RoomardPool, auth });
+    await revApp.ready();
+    const res = await revApp.inject({
+      method: 'POST',
+      url: '/v1/auth/refresh',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ refreshToken: 'rt_revoked' }),
+    });
+    expect(res.statusCode).toBe(401);
+    await revApp.close();
+  });
+
   it('POST /v1/auth/logout without a token returns 401 (logout requires a principal)', async () => {
     const res = await app.inject({
       method: 'POST',
