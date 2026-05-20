@@ -19,12 +19,7 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { request as undiciRequest } from 'undici';
 
-import {
-  GuestRepo,
-  buildSayThis,
-  analyseComplaintTrajectory,
-  type AiInvokeCapability,
-} from './service.js';
+import { GuestRepo, buildSayThis } from './service.js';
 
 const log = createLogger({ name: 'guest-svc' });
 
@@ -45,7 +40,7 @@ export function buildServer(deps: BuildDeps): FastifyInstance {
   const repo = new GuestRepo();
 
   async function aiInvoke(input: {
-    capability: AiInvokeCapability;
+    capability: 'llm.brief';
     tenantId: string;
     requestId: string;
     payload: unknown;
@@ -132,24 +127,6 @@ export function buildServer(deps: BuildDeps): FastifyInstance {
       ),
     );
     reply(replyHttp, 200, suggestion);
-  });
-
-  // UC-11: complaint trajectory analysis.
-  // Rule-based threshold + ERNIE X1 reasoning. Returns the verdict and the
-  // chain of issues considered, so the front-desk manager can see *why* a
-  // guest was flagged, not just *that* they were.
-  app.get('/v1/guests/:id/trajectory', async (req, replyHttp) => {
-    const principal = requirePrincipal(req);
-    requirePermission(principal, 'guest.read');
-    const id = UuidSchema.parse((req.params as { id: string }).id);
-    const verdict = await withPrincipalContext(deps.pool, req, (client) =>
-      analyseComplaintTrajectory(
-        client,
-        { aiInvoke },
-        { guestId: id, tenantId: principal.tenantId, requestId: String(req.id) },
-      ),
-    );
-    reply(replyHttp, 200, verdict);
   });
 
   return app;

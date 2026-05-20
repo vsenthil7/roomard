@@ -310,11 +310,9 @@ export class GuestRepo {
  * SayThis builder — combines top 3 preferences and last issue into a 1-line
  * suggestion. Calls the AI gateway via `aiInvoke` (injected so tests can stub).
  */
-export type AiInvokeCapability = 'llm.brief' | 'llm.review_link' | 'llm.reasoning';
-
-export interface AiInvokeFn {
-  (payload: {
-    capability: AiInvokeCapability;
+export interface SayThisDeps {
+  aiInvoke(payload: {
+    capability: 'llm.brief';
     tenantId: string;
     requestId: string;
     payload: unknown;
@@ -323,10 +321,6 @@ export interface AiInvokeFn {
     modelId: string;
     promptVersion?: string;
   }>;
-}
-
-export interface SayThisDeps {
-  aiInvoke: AiInvokeFn;
 }
 
 export async function buildSayThis(
@@ -365,209 +359,6 @@ export async function buildSayThis(
     promptVersion: result.promptVersion ?? 'v1',
     modelId: result.modelId,
   };
-}
-
-// ===========================================================================
-// UC-11: Complaint trajectory analyser.
-// ===========================================================================
-//
-// Threshold rule (BRD §6.1, UC-11):
-//   - 3 or more issues in the last 12 months → guest flagged for review
-//   - But: the *trajectory* matters more than the count. A guest with
-//     "3 minor issues spread over 18 months" is different from "3 issues
-//     in the last 60 days each more severe than the last".
-//
-// This is the natural caller for ERNIE X1 (llm.reasoning). The rule-based
-// part returns the count and dates; the AI part returns a verdict on
-// "is this guest's experience deteriorating?" with reasoning steps.
-//
-// We deliberately apply the 3-in-12-months rule deterministically (SQL)
-// before calling AI — so AI only runs when there's something to reason
-// about, keeping inference cost bounded.
-
-export interface IssueRecord {
-  id: string;
-  occurredAt: string;
-  severity: number;
-  title: string;
-  resolvedAt: string | null;
-}
-
-export interface TrajectoryVerdict {
-  guestId: string;
-  flagged: boolean;
-  reason: 'no_issues' | 'below_threshold' | 'threshold_with_trajectory' | 'reasoning_unavailable';
-  issueCount12mo: number;
-  issuesConsidered: IssueRecord[];
-  trajectory: 'stable' | 'improving' | 'deteriorating' | 'unknown';
-  aiReasoning: string[];
-  modelId?: string;
-  promptVersion?: string;
-  generatedAt: string;
-}
-
-export interface TrajectoryDeps {
-  aiInvoke: AiInvokeFn;
-}
-
-const TRAJECTORY_ISSUE_THRESHOLD = 3;
-const TRAJECTORY_LOOKBACK_MONTHS = 12;
-
-export async function analyseComplaintTrajectory(
-  client: PoolClient,
-  deps: TrajectoryDeps,
-  args: { guestId: string; tenantId: string; requestId: string },
-): Promise<TrajectoryVerdict> {
-  // Confirm guest exists (RLS already filters cross-tenant).
-  const { rows: guestRows } = await client.query<{ id: string; display_name: string }>(
-    `SELECT id, display_name FROM guests WHERE id = $1`,
-    [args.guestId],
-  );
-  if (guestRows.length === 0) {
-    throw new Error('guest not found');
-  }
-
-  // Pull issues from the last N months.
-  const { rows: issueRows } = await client.query<{
-    id: string;
-    occurred_at: Date;
-    severity: number;
-    title: string;
-    resolved_at: Date | null;
-  }>(
-    `SELECT id, occurred_at, severity, title, resolved_at
-     FROM issues
-     WHERE guest_id = $1
-       AND occurred_at > now() - ($2 || ' months')::interval
-     ORDER BY occurred_at ASC`,
-    [args.guestId, String(TRAJECTORY_LOOKBACK_MONTHS)],
-  );
-
-  const issues: IssueRecord[] = issueRows.map((r) => ({
-    id: r.id,
-    occurredAt: r.occurred_at.toISOString(),
-    severity: r.severity,
-    title: r.title,
-    resolvedAt: r.resolved_at ? r.resolved_at.toISOString() : null,
-  }));
-
-  // Fast paths — no inference needed.
-  if (issues.length === 0) {
-    return {
-      guestId: args.guestId,
-      flagged: false,
-      reason: 'no_issues',
-      issueCount12mo: 0,
-      issuesConsidered: [],
-      trajectory: 'stable',
-      aiReasoning: [],
-      generatedAt: new Date().toISOString(),
-    };
-  }
-  if (issues.length < TRAJECTORY_ISSUE_THRESHOLD) {
-    return {
-      guestId: args.guestId,
-      flagged: false,
-      reason: 'below_threshold',
-      issueCount12mo: issues.length,
-      issuesConsidered: issues,
-      trajectory: 'unknown',
-      aiReasoning: [],
-      generatedAt: new Date().toISOString(),
-    };
-  }
-
-  // Threshold met. Ask ERNIE X1 to reason about whether the trajectory is
-  // deteriorating. We pass a structured prompt; X1 returns a JSON-shaped
-  // answer + reasoning steps.
-  const prompt = buildTrajectoryPrompt(guestRows[0]!.display_name, issues);
-  let aiResult: { output: unknown; modelId: string; promptVersion?: string } | null = null;
-  try {
-    aiResult = await deps.aiInvoke({
-      capability: 'llm.reasoning',
-      tenantId: args.tenantId,
-      requestId: args.requestId,
-      payload: { prompt },
-    });
-  } catch {
-    // If reasoning is unavailable, still return the rule-based flag —
-    // we don't want a flaky AI call to mask a real trajectory issue.
-    return {
-      guestId: args.guestId,
-      flagged: true,
-      reason: 'reasoning_unavailable',
-      issueCount12mo: issues.length,
-      issuesConsidered: issues,
-      trajectory: 'unknown',
-      aiReasoning: ['Trajectory inference unavailable — flagged on rule-based threshold alone.'],
-      generatedAt: new Date().toISOString(),
-    };
-  }
-
-  const parsed = parseReasoningOutput(aiResult.output);
-  return {
-    guestId: args.guestId,
-    flagged: true,
-    reason: 'threshold_with_trajectory',
-    issueCount12mo: issues.length,
-    issuesConsidered: issues,
-    trajectory: parsed.trajectory,
-    aiReasoning: parsed.reasoning,
-    modelId: aiResult.modelId,
-    promptVersion: aiResult.promptVersion,
-    generatedAt: new Date().toISOString(),
-  };
-}
-
-function buildTrajectoryPrompt(displayName: string, issues: IssueRecord[]): string {
-  const lines = issues.map(
-    (i) =>
-      `- ${i.occurredAt.slice(0, 10)} (severity ${i.severity}): ${i.title}` +
-      (i.resolvedAt ? ` [resolved ${i.resolvedAt.slice(0, 10)}]` : ' [unresolved]'),
-  );
-  return [
-    `You are analysing the complaint trajectory of a hotel guest named ${displayName}.`,
-    `The following issues were recorded over the last 12 months:`,
-    ...lines,
-    ``,
-    `Determine whether this guest's experience is "improving", "stable", or "deteriorating".`,
-    `Consider: severity trend, frequency trend, resolution speed, and whether unresolved issues remain.`,
-    ``,
-    `Return strict JSON in this shape:`,
-    `{"trajectory": "improving|stable|deteriorating", "reasoning": ["step 1", "step 2", "step 3"], "answer": "1-sentence summary"}`,
-  ].join('\n');
-}
-
-function parseReasoningOutput(output: unknown): {
-  trajectory: 'stable' | 'improving' | 'deteriorating' | 'unknown';
-  reasoning: string[];
-} {
-  if (typeof output !== 'object' || output === null) {
-    return { trajectory: 'unknown', reasoning: [] };
-  }
-  // The mock returns { answer, reasoning } at the top level.
-  // The real Qianfan call returns either parsed JSON or {rawText: ...} —
-  // try to JSON-parse rawText if present.
-  let obj = output as Record<string, unknown>;
-  if (typeof obj.rawText === 'string') {
-    try {
-      obj = JSON.parse(obj.rawText) as Record<string, unknown>;
-    } catch {
-      return { trajectory: 'unknown', reasoning: [String(obj.rawText)] };
-    }
-  }
-  const trajectory =
-    obj.trajectory === 'improving' ||
-    obj.trajectory === 'stable' ||
-    obj.trajectory === 'deteriorating'
-      ? obj.trajectory
-      : 'unknown';
-  const reasoning = Array.isArray(obj.reasoning)
-    ? obj.reasoning.map(String)
-    : typeof obj.answer === 'string'
-      ? [obj.answer]
-      : [];
-  return { trajectory, reasoning };
 }
 
 function encodeCursor(input: { createdAt: string; id: string }): string {

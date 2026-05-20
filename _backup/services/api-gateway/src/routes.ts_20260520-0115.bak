@@ -50,7 +50,6 @@ export const ROUTES: RouteRule[] = [
   { method: 'GET', pathPattern: '/v1/guests/:id/preferences', upstream: 'guest', requiredPermission: 'preference.read' },
   { method: 'GET', pathPattern: '/v1/guests/:id/history', upstream: 'guest', requiredPermission: 'guest.read' },
   { method: 'GET', pathPattern: '/v1/guests/:id/say-this', upstream: 'guest', requiredPermission: 'guest.read' },
-  { method: 'GET', pathPattern: '/v1/guests/:id/trajectory', upstream: 'guest', requiredPermission: 'guest.read' },
 
   // Capture
   { method: 'POST', pathPattern: '/v1/captures', upstream: 'capture', requiredPermission: 'capture.write' },
