@@ -1,0 +1,58 @@
+/**
+ * @roomard/logger — Structured JSON logger.
+ *
+ * Wraps pino. Every log line carries the service name (set via createLogger), and any
+ * tenant_id, user_id, request_id, correlation_id keys passed via context are preserved
+ * across child loggers.
+ *
+ * Sensitive fields are redacted by default: password, password_hash, token, secret,
+ * authorization, cookie, mfa_secret, credentials_ref.
+ */
+import { pino, stdSerializers, stdTimeFunctions, type Logger as PinoLogger, type LoggerOptions } from 'pino';
+
+export interface CreateLoggerOptions {
+  name: string;
+  level?: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  base?: Record<string, unknown>;
+}
+
+const SENSITIVE_PATHS = [
+  'password',
+  'password_hash',
+  '*.password',
+  '*.password_hash',
+  'token',
+  'tokens',
+  'access_token',
+  'refresh_token',
+  '*.access_token',
+  '*.refresh_token',
+  'authorization',
+  'cookie',
+  '*.cookie',
+  'set-cookie',
+  'mfa_secret',
+  'credentials_ref',
+  'secret',
+  '*.secret',
+];
+
+export type Logger = PinoLogger;
+
+export function createLogger(opts: CreateLoggerOptions): Logger {
+  const level = opts.level ?? (process.env.LOG_LEVEL as LoggerOptions['level']) ?? 'info';
+  return pino({
+    name: opts.name,
+    level,
+    base: { service: opts.name, env: process.env.NODE_ENV, ...(opts.base ?? {}) },
+    timestamp: stdTimeFunctions.isoTime,
+    redact: { paths: SENSITIVE_PATHS, censor: '[REDACTED]' },
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+    serializers: {
+      err: stdSerializers.err,
+      error: stdSerializers.err,
+    },
+  });
+}

@@ -20,8 +20,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "pino": "^9.4.0",
-    "undici": "^6.20.0"
+    "pino": "^9.4.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.0",
