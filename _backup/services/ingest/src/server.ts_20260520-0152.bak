@@ -189,9 +189,7 @@ export function buildServer(deps: IngestDeps): FastifyInstance {
     publicPaths: ['/health', '/webhooks/mews'],
   });
 
-  // /health is registered by applyFramework above — do NOT re-register here.
-  // Fastify rejects duplicate route registrations with FST_ERR_DUPLICATED_ROUTE
-  // which previously crashed the service at startup (G-27).
+  app.get('/health', async () => ({ status: 'ok', service: 'ingest' }));
 
   app.post('/webhooks/mews', async (req, reply) => {
     const rawBody = req.body as Buffer;
