@@ -1,13 +1,9 @@
 /**
  * Ingest service.
  *
- * Endpoints:
- *  - POST /webhooks/mews:          PMS webhook, HMAC-secured, no auth header
- *  - POST /v1/reviews/poll:        triggers review polling for a property/source
- *                                  (UC-25). Authenticated, admin permission.
- *
- * Stub adapters for TripAdvisor / Booking / Google are registered but return
- * empty arrays until commercial API access is wired. DirectFeedback is real.
+ * - POST /webhooks/mews: receives reservation/booking events. Verifies HMAC-SHA256
+ *   signature against the per-integration secret, then upserts the stay row.
+ * - Stub pollers for TripAdvisor / Booking.com / Google. Behind feature flag for MVP.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -15,31 +11,10 @@ import sensible from '@fastify/sensible';
 import { RoomardPool, dbConfigFromEnv, withTenantContext } from '@roomard/db';
 import { AuthenticationError, IntegrationError, NotFoundError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
-import { UuidSchema } from '@roomard/schemas';
-import {
-  applyFramework,
-  authConfigFromEnv,
-  requirePrincipal,
-  requirePermission,
-  withPrincipalContext,
-  reply as fmReply,
-} from '@roomard/service-framework';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
-import { request as undiciRequest } from 'undici';
 import { z } from 'zod';
-
-import {
-  pollAndLink,
-  DirectFeedbackAdapter,
-  StubTripAdvisorAdapter,
-  StubBookingAdapter,
-  StubGoogleAdapter,
-  type SourceAdapter,
-  type PollSummary,
-  type ReviewSource,
-} from './review-poller.js';
 
 const log = createLogger({ name: 'ingest-svc' });
 
@@ -76,15 +51,7 @@ export function verifyMewsSignature(
 export interface IngestDeps {
   pool: RoomardPool;
   webhookSecretLookup(tenantId: string, integrationKind: 'mews'): Promise<string | null>;
-  /** URL of the AI gateway service. Used by review-link calls. */
-  aiGatewayUrl: string;
 }
-
-/** Schema for /v1/reviews/poll body — explicit per-property + per-source dispatch. */
-const PollRequestSchema = z.object({
-  propertyId: UuidSchema,
-  source: z.enum(['tripadvisor', 'booking_com', 'google', 'manual']),
-});
 
 export async function ingestMewsReservation(
   client: PoolClient,
@@ -177,16 +144,8 @@ export function buildServer(deps: IngestDeps): FastifyInstance {
   });
   app.register(sensible);
 
-  // Webhook needs raw body for HMAC verification. The framework is applied
-  // below with /webhooks/mews exempt from auth — the HMAC IS the auth there.
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
     done(null, body);
-  });
-
-  applyFramework(app, {
-    serviceName: 'ingest',
-    authConfig: authConfigFromEnv(),
-    publicPaths: ['/health', '/webhooks/mews'],
   });
 
   app.get('/health', async () => ({ status: 'ok', service: 'ingest' }));
@@ -223,82 +182,7 @@ export function buildServer(deps: IngestDeps): FastifyInstance {
     reply.code(200).send({ ingestStatus: 'accepted', ...result });
   });
 
-  // UC-25: review polling. Authenticated admin endpoint — an external
-  // scheduler (k8s CronJob or GitHub Actions) calls this per property/source
-  // on a cadence. We return a PollSummary that the scheduler can log.
-  app.post('/v1/reviews/poll', async (req, replyHttp) => {
-    const principal = requirePrincipal(req);
-    requirePermission(principal, 'integration.write');
-    const rawBody = req.body as Buffer;
-    let parsed: z.infer<typeof PollRequestSchema>;
-    try {
-      parsed = PollRequestSchema.parse(JSON.parse(rawBody.toString('utf8')));
-    } catch (err) {
-      log.warn({ err }, 'invalid poll request');
-      replyHttp.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'invalid body' } });
-      return;
-    }
-
-    const aiInvoke = async (input: {
-      capability: 'llm.review_link';
-      tenantId: string;
-      requestId: string;
-      payload: unknown;
-    }): Promise<{ output: unknown; modelId: string; promptVersion?: string }> => {
-      const { statusCode, body } = await undiciRequest(`${deps.aiGatewayUrl}/v1/invoke`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-      });
-      const json = (await body.json()) as {
-        output: unknown;
-        modelId: string;
-        promptVersion?: string;
-      };
-      if (statusCode !== 200) {
-        throw new Error(`ai gateway returned ${statusCode}`);
-      }
-      return json;
-    };
-
-    const summary: PollSummary = await withPrincipalContext(deps.pool, req, async (client) => {
-      const adapter = buildAdapter(parsed.source, client);
-      return pollAndLink(
-        client,
-        { aiInvoke },
-        {
-          tenantId: principal.tenantId,
-          propertyId: parsed.propertyId,
-          requestId: String(req.id),
-          adapter,
-        },
-      );
-    });
-
-    fmReply(replyHttp, 200, summary);
-  });
-
   return app;
-}
-
-/**
- * Build a source adapter for a given enum value. The DirectFeedback adapter
- * reads from direct_feedback_intake using the request's PoolClient (so RLS
- * applies); the stub adapters need no state.
- */
-function buildAdapter(source: ReviewSource, client: PoolClient): SourceAdapter {
-  switch (source) {
-    case 'manual':
-      return new DirectFeedbackAdapter({
-        query: client.query.bind(client) as PoolClient['query'],
-      });
-    case 'tripadvisor':
-      return new StubTripAdvisorAdapter();
-    case 'booking_com':
-      return new StubBookingAdapter();
-    case 'google':
-      return new StubGoogleAdapter();
-  }
 }
 
 export async function defaultSecretLookup(
@@ -317,10 +201,8 @@ export async function defaultSecretLookup(
 
 export async function start(): Promise<void> {
   const pool = new RoomardPool(dbConfigFromEnv());
-  const aiGatewayUrl = process.env.AI_GATEWAY_URL ?? 'http://localhost:3008';
   const app = buildServer({
     pool,
-    aiGatewayUrl,
     webhookSecretLookup: (tenantId, kind) => defaultSecretLookup(pool, tenantId, kind),
   });
   const port = Number.parseInt(process.env.INGEST_PORT ?? '3009', 10);

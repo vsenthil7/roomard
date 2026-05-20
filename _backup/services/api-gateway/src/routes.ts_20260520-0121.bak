@@ -73,9 +73,6 @@ export const ROUTES: RouteRule[] = [
 
   // Ingest (webhooks — public, secured by HMAC inside the service)
   { method: 'POST', pathPattern: '/webhooks/mews', upstream: 'ingest', requiredPermission: 'public' },
-
-  // Review polling — triggers per-property fetch + linking. Authenticated.
-  { method: 'POST', pathPattern: '/v1/reviews/poll', upstream: 'ingest', requiredPermission: 'integration.write' },
 ];
 
 /**

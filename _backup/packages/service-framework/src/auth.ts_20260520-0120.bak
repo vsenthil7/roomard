@@ -82,7 +82,6 @@ export function rolesToPermissions(roles: string[]): string[] {
       'review.write',
       'audit.read',
       'integration.read',
-      'integration.write',
     ],
     front_desk_manager: [
       'guest.read',
