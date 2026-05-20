@@ -2,22 +2,24 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 07:05 BST (CP-49)
+**Last updated:** 2026-05-20 07:42 BST (CP-51)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 211 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 228 passing, 0 failing, 7 skipped (DB integration)
 
 ---
 
-## Session timeline (CP-1 → CP-49)
+## Session timeline (CP-1 → CP-51)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 49 total since session start)
+### Commits landed (newest → oldest, 51 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-49 | [DOCS] | Traceability live through CP-48 — records the end-to-end smoke-test bug cascade: G-28✅(CP-46), G-29✅(CP-47), G-30✅(CP-48), and tickets G-31 (DB schema never migrated to the Postgres container — a provisioning gap, not a code bug). The login request path SPA→gateway→auth-svc→AuthService→DB is now fully correct end to end; only the empty database remains. Score 30 fixed, 1 invalid, 2 open. | ✅ |
+| (this) | CP-51 | [DOCS] | Traceability live through CP-50 — records the **login-loop breakthrough**: G-31✅ (DB provisioned: 16 migrations + seed applied to container Postgres), G-32✅ (auth `buildSession` permission-shape bug), and G-24✅ (nginx 502 resolved as a downstream symptom of G-28/G-29). Full chain verified live: `POST /v1/auth/password/login` → 200 + 317-char JWT; `/v1/auth/me` with Bearer → 200; `web:8180/api/v1/auth/...` browser path → 200. 15/15 containers healthy, 228 workspace tests green. Score 33 fixed, 1 invalid, 0 functional open. | ✅ |
+| `b8ab5c1` | CP-50 | [FIX] | G-31 (provisioning) applied all 16 migrations + seed to the container Postgres (demo tenant `demo`, 3 users incl. `admin@demo.roomard.local` / `Roomard123!`, 6 roles, property, sample guests). G-32 (code bug) `buildSession` used `jsonb_array_elements_text` on a jsonb *object* → Postgres 22023 on every login. Fixed with exported `flattenRolePermissions` (object-of-arrays → canonical `resource.action`; singularises plurals; collapses `all`/`*` → `*`; legacy array passthrough; safe on null/non-object). +7 unit tests (auth 9→16). Lint 0/0. | ✅ unit + live |
+| `b9328a5` | CP-49 | [DOCS] | Traceability live through CP-48 — recorded G-28/G-29/G-30 fixes, ticketed G-31; score 30 fixed/1 invalid/2 open; key learning re live-stack vs mocked tests. | ✅ |
 | `7d3f691` | CP-48 | [FIX] | G-30 auth-svc routes missing `/v1` prefix — the gateway forwards the full inbound URL (`/v1/auth/...`) unchanged and every other service uses `/v1/`, but auth-svc registered at `/auth/...` with publicPaths also lacking `/v1`. Framework preHandler then demanded a Bearer token on the login endpoint itself — a chicken-and-egg lockout. Aligned all 7 auth routes + 5 publicPaths to `/v1/auth/...`. 9/9 auth tests pass (service-level, no path churn). | ✅ unit + live |
 | `fc05e2a` | CP-47 | [FIX] | G-29 api-gateway forwarded hop-by-hop headers to undici — `expect: 100-continue` (sent by PowerShell Invoke-WebRequest, browsers, curl) makes undici throw `UND_ERR_NOT_SUPPORTED` → 500. Added module-scope `HOP_BY_HOP_HEADERS` set (RFC 7230 §6.1 + `expect`); forward loop strips them while preserving application + edge-identity headers. +1 G-29 regression test (api-gateway 13→14). Surfaced the instant CP-46 let POSTs reach the proxy handler. | ✅ unit + live |
 | `cd9109c` | CP-46 | [FIX] | G-28 api-gateway JSON content-type parser + statusCode forwarding — (1) `addContentTypeParser('application/json', {parseAs:'buffer'})` so Fastify 5 catch-all routes accept JSON bodies (was throwing `FST_ERR_CTP_INVALID_MEDIA_TYPE` 415 before the handler). (2) `setErrorHandler` forwards `FST_`-prefixed 4xx statusCodes instead of masking as 500. New `server.test.ts` (+5 tests, 3 G-28 regressions). api-gateway 8→13. | ✅ unit + live |
@@ -69,7 +71,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-31)
+## Bugs discovered & status (G-1 through G-32)
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -80,16 +82,19 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-21 | ai-gateway/api-gateway `Cannot find package 'pg'` — runtime install dropped transitive workspace dep | ✅ FIXED | CP-33 |
 | G-22 | 6 services `Cannot find package 'jose'` — same root cause as G-21 | ✅ FIXED | CP-33 |
 | G-23 | ai-gateway `DatabaseError: DATABASE_URL is required` — compose lacked DB env | ✅ FIXED | CP-34 |
-| G-24 | Nginx → api-gateway 502 Bad Gateway through web container | ❌ OPEN | (next session) |
+| G-24 | Nginx → api-gateway 502 Bad Gateway through web container — was a downstream symptom of the gateway's G-28/G-29 failures (nginx proxies to a gateway that 500'd on every JSON POST). Resolved once the gateway could handle bodies. Verified: `web:8180/api/v1/auth/password/login` → 200 + JWT. | ✅ FIXED | CP-46/47 (confirmed CP-50) |
 | G-25 | (CRITICAL) QianfanProvider routing `ocr.card` through chat endpoint | ✅ FIXED | CP-37 |
 | G-26 | (HIGH) auth-svc would boot with dev default JWT_SECRET in production | ✅ FIXED | CP-37 |
 | G-27 | ingest-svc duplicate `/health` registration — `FST_ERR_DUPLICATED_ROUTE` crashed startup. Surfaced ONLY after CP-31 zip was deployed in container — latent in unit tests because they don't exercise `buildServer` → `applyFramework` integration. | ✅ FIXED | CP-44 |
 | G-28 | api-gateway returns HTTP 500 on every JSON POST. Root cause: `FST_ERR_CTP_INVALID_MEDIA_TYPE` (Fastify 5 has no default JSON parser for routes registered via `app.route({ url: '/v1/*' })` catch-all without an explicit `addContentTypeParser`). Compounded by: `setErrorHandler` returns generic 500 instead of forwarding the FastifyError's `statusCode: 415`. Blocks the entire SPA → api-gateway → upstream chain for any POST/PATCH. | ✅ FIXED | CP-46 |
 | G-29 | api-gateway forwarded hop-by-hop headers (incl. `expect: 100-continue`) to undici, which throws `UND_ERR_NOT_SUPPORTED` → 500. Surfaced the instant G-28 was fixed and POSTs first reached the proxy handler. | ✅ FIXED | CP-47 |
 | G-30 | auth-svc registered routes at `/auth/...` while the gateway forwards `/v1/auth/...` (every other service uses `/v1/`). Login was a chicken-and-egg lockout — framework preHandler demanded a Bearer token on the login endpoint. | ✅ FIXED | CP-48 |
-| G-31 | DB schema never migrated to the running Postgres container — `relation "users" does not exist` on first real login. NOT a code bug: 16 migrations exist in `packages/db/migrations/` plus a runner (`pnpm --filter @roomard/db migrate` / `reset`); they've simply never been applied to the container DB. Login path is otherwise fully correct end to end. | ❌ OPEN | (CP-50) |
+| G-31 | DB schema never migrated to the running Postgres container — `relation "users" does not exist` on first real login. Provisioning gap, not a code bug. Applied 16 migrations + seed via `DATABASE_URL=...@localhost:5532/roomard pnpm --filter @roomard/db migrate` then `seed`. | ✅ FIXED | CP-50 |
+| G-32 | auth-svc `buildSession` queried `roles.permissions` with `jsonb_array_elements_text` (array-only) but the schema/seed store permissions as an OBJECT of `{ resource: [actions] }` (or `{ all: ['*'] }`). Every login threw Postgres 22023 `cannot extract elements from an object` *after* the user lookup succeeded. Fixed by fetching raw jsonb and flattening in TypeScript (`flattenRolePermissions`). | ✅ FIXED | CP-50 |
 
-**Score: 30 fixed, 1 invalid (G-5), 2 open (G-24 nginx 502, G-31 DB not migrated).**
+**Score: 33 fixed, 1 invalid (G-5), 0 functional bugs open.**
+
+The login path is now demonstrably working end to end on the live 15-container stack — a user can authenticate through the browser-facing nginx route and receive a working JWT that the gateway accepts on protected endpoints.
 
 ---
 
@@ -119,11 +124,11 @@ From BRD §6.2 — original wedge of 8 use cases:
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
 | 7 packages | ✅ green | ✅ 78 tests (errors 22, logger **11**, schemas 32, framework 13, others) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 125 tests (ai-gateway **37**, guest **12**, ingest **21**, brief **17**, auth 9, api-gateway **14**, audit 7, capture 4, exception 4, tenant 3) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 142 tests (ai-gateway **37**, ingest **21**, brief **17**, **auth 16**, **api-gateway 14**, guest **12**, audit 7, capture 4, exception 4, tenant 3) | ✅ 0 errors |
 | apps/web | ✅ green | ✅ 8 tests | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **211 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| **Workspace total** | **19/19 green** | **228 passing, 0 failing, 7 skipped** | **0 lint errors** |
 
-**Delta:** +3 tests since CP-44 baseline (api-gateway server.test.ts: G-28 ×3, G-29 ×1, plus /health and 404 envelope; net +6 in api-gateway from 8→14, partially offsetting prior counting).
+**Delta:** +17 tests since CP-49 (api-gateway G-29 ×1; auth `flattenRolePermissions` ×7; plus prior server.test.ts additions). No regressions from the G-32 auth change — full workspace re-run green.
 
 ---
 
@@ -141,23 +146,30 @@ From BRD §6.2 — original wedge of 8 use cases:
 
 Same dependency graph as documented at CP-35. Build / typecheck / lint / unit-tests / docker-build matrix all expected green. Coverage gate still honestly red at ~35-45% vs 90% — the +81 tests should lift this but full re-measurement is pending.
 
-**Post-CP-48 milestone — the login path is now fully wired end to end.** A live PowerShell smoke test against `POST http://localhost:3100/v1/auth/password/login` drove a four-layer bug cascade, each fix exposing the next: 415-masked-500 (G-28, CP-46) → undici expect-header 500 (G-29, CP-47) → auth path-prefix lockout 401 (G-30, CP-48) → `relation "users" does not exist` (G-31, provisioning). The request now flows SPA→gateway→auth-svc→AuthService→DB correctly; the only remaining blocker is that the Postgres container has never had migrations applied (G-31, next). G-24 (nginx 502) is expected to be resolved as a side effect of G-28/G-29 since nginx proxies to the gateway — to be re-tested through `web:8180` after G-31.
+**Post-CP-50 milestone — the login loop is verified working end to end on the live stack.** The four-layer bug cascade (G-28→G-29→G-30→G-31/G-32) is fully closed:
+- `POST http://localhost:3100/v1/auth/password/login` (admin@demo.roomard.local / Roomard123! / tenant `demo`) → **200**, `status: success`, a real 317-char HS256 JWT `access_token` + `refresh_token` + expiries.
+- `GET http://localhost:3100/v1/auth/me` with `Authorization: Bearer <token>` → **200**, returns the authenticated user + tenant slug. Proves the full issue→verify→RBAC→tenant-resolution loop.
+- `POST http://localhost:8180/api/v1/auth/password/login` (the browser-facing nginx route, which rewrites `/api/` → `/` and proxies to `api-gateway:3000`) → **200** + JWT. This confirms G-24 (nginx 502) is resolved.
+- **15/15 containers healthy** with all CP-37..CP-50 code integrated; database provisioned with 16 migrations + seed.
 
-**Key learning:** unit tests with mocked undici could not have caught G-29 (needs a real client sending `expect`) or G-30 (needs the real gateway→upstream path). The live-stack smoke test earned its keep. Cross-service path-prefix mismatches like G-30 are invisible to per-service tests — only an integration test through the actual gateway catches them.
+**Key learning:** unit tests with mocked undici could not have caught G-29 (needs a real client sending `expect`) or G-30 (needs the real gateway→upstream path). The live-stack smoke test earned its keep. Cross-service path-prefix mismatches like G-30, and schema/code contract mismatches like G-32, are invisible to per-service unit tests — only an integration test through the actual gateway against a real DB catches them. The coverage roadmap (CP-52+) prioritises exactly this gap.
 
 ---
 
 ## Roadmap
 
+With all functional bugs closed and the login loop verified live, the remaining work is the coverage lift toward the ≥90% gate.
+
 | CP | Target | Effort |
 |---|---|---|
-| CP-50 | G-31 — apply 16 migrations (+ seed) to the container Postgres, re-run login smoke, expect 200+tokens or clean 401 invalid-credentials | S |
-| CP-51 | G-24 — re-test nginx → api-gateway through `web:8180` (likely already resolved by G-28/G-29); fix if still 502 | S |
-| CP-52 | apps/web — 1 test per route component | M |
-| CP-53 | exception, audit, tenant server.ts — supertest pattern (the gap that hid G-28/G-29) | L |
+| CP-52 | apps/web — 1 test per route component (incl. the new `/prep-cards` route) | M |
+| CP-53 | exception, audit, tenant server.ts — server-level supertest pattern (the gap that hid G-28/G-29/G-30) | L |
 | CP-54 | capture object-store — mock S3 client tests | S |
 | CP-55 | db — postgres in test setup, unblock 7 skipped integration tests | M |
-| CP-56 | Verify aggregate ≥90%, declare baseline locked | S |
+| CP-56 | api-gateway — broaden server.test.ts upstream-proxy coverage | M |
+| CP-57 | Verify aggregate ≥90%, declare baseline locked | S |
+
+Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
 Deferred (need external resources or sprint-length work, per the original code review §3 + the parallel-session CP-31 summary §4):
 - MeDo not used (strategic, requires product rebuild)
