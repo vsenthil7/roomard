@@ -27,22 +27,16 @@ export function buildServer(deps: { pool: RoomardPool; auth: AuthService }): Fas
   applyFramework(app, {
     serviceName: 'auth',
     authConfig: authConfigFromEnv(),
-    // G-30 — these MUST carry the /v1 prefix. The api-gateway forwards the full
-    // inbound URL (e.g. /v1/auth/password/login) unchanged to the upstream, and
-    // every other service registers its routes under /v1/. auth-svc previously
-    // registered at /auth/... with publicPaths also lacking /v1, so the framework
-    // preHandler demanded a Bearer token on the very endpoint used to obtain one
-    // — a lockout that made login unreachable through the gateway.
     publicPaths: [
-      '/v1/auth/sso/start',
-      '/v1/auth/sso/callback',
-      '/v1/auth/password/login',
-      '/v1/auth/mfa/verify',
-      '/v1/auth/refresh',
+      '/auth/sso/start',
+      '/auth/sso/callback',
+      '/auth/password/login',
+      '/auth/mfa/verify',
+      '/auth/refresh',
     ],
   });
 
-  app.post('/v1/auth/password/login', async (req, replyHttp) => {
+  app.post('/auth/password/login', async (req, replyHttp) => {
     const body = PasswordLoginRequestSchema.parse(req.body);
     const result = await deps.auth.passwordLogin(body);
     if (result.status === 'mfa_required') {
@@ -64,7 +58,7 @@ export function buildServer(deps: { pool: RoomardPool; auth: AuthService }): Fas
     reply(replyHttp, 200, resp);
   });
 
-  app.post('/v1/auth/mfa/verify', async (req, replyHttp) => {
+  app.post('/auth/mfa/verify', async (req, replyHttp) => {
     const body = MfaVerifyRequestSchema.parse(req.body);
     const result = await deps.auth.verifyMfa(body);
     const resp: LoginResponse = {
@@ -81,7 +75,7 @@ export function buildServer(deps: { pool: RoomardPool; auth: AuthService }): Fas
     reply(replyHttp, 200, resp);
   });
 
-  app.post('/v1/auth/refresh', async (req, replyHttp) => {
+  app.post('/auth/refresh', async (req, replyHttp) => {
     const body = RefreshRequestSchema.parse(req.body);
     const result = await deps.auth.refresh(body.refreshToken);
     const resp: LoginResponse = {
@@ -98,14 +92,14 @@ export function buildServer(deps: { pool: RoomardPool; auth: AuthService }): Fas
     reply(replyHttp, 200, resp);
   });
 
-  app.post('/v1/auth/logout', async (req, replyHttp) => {
+  app.post('/auth/logout', async (req, replyHttp) => {
     const body = LogoutRequestSchema.parse(req.body ?? {});
     const principal = requirePrincipal(req);
     await deps.auth.logout(body.refreshToken, body.allDevices ?? false, principal.userId);
     replyHttp.code(204).send();
   });
 
-  app.get('/v1/auth/me', async (req, replyHttp) => {
+  app.get('/auth/me', async (req, replyHttp) => {
     const principal = requirePrincipal(req);
     const me = await deps.auth.me(principal.userId);
     const resp: MeResponse = {
@@ -122,13 +116,13 @@ export function buildServer(deps: { pool: RoomardPool; auth: AuthService }): Fas
   });
 
   // SSO stubs — real implementation slotted in Sprint 2 when IdP creds are available.
-  app.post('/v1/auth/sso/start', async (_req, replyHttp) => {
+  app.post('/auth/sso/start', async (_req, replyHttp) => {
     replyHttp.code(501).send({
       error: { code: 'NOT_IMPLEMENTED', message: 'SSO not yet wired in this build' },
     });
   });
 
-  app.get('/v1/auth/sso/callback', async (_req, replyHttp) => {
+  app.get('/auth/sso/callback', async (_req, replyHttp) => {
     replyHttp.code(501).send({
       error: { code: 'NOT_IMPLEMENTED', message: 'SSO not yet wired in this build' },
     });
