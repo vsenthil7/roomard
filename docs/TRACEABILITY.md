@@ -2,23 +2,27 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 02:35 BST (CP-45)
+**Last updated:** 2026-05-20 07:05 BST (CP-49)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 208 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 211 passing, 0 failing, 7 skipped (DB integration)
 
 ---
 
-## Session timeline (CP-1 → CP-45)
+## Session timeline (CP-1 → CP-49)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 45 total since session start)
+### Commits landed (newest → oldest, 49 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-45 | [DOCS] | Traceability live through CP-44 — records G-27 fix and tickets G-28 as new open finding (api-gateway returns HTTP 500 on every JSON POST because no `application/json` content-type parser is registered; Fastify 5 throws 415 which the error handler masks as 500). 15-of-15 docker containers healthy milestone documented. Discipline: this CP updates doc immediately after CP-44 not retroactively. | ✅ |
-| `0b23569` | CP-44 | [FIX] | G-27 ingest-svc duplicate `/health` route registration crashed startup — `applyFramework` registers `/health` automatically at line 186; the CP-31-imported server.ts at line 192 then re-registered it which Fastify rejects with `FST_ERR_DUPLICATED_ROUTE`. Container restart-looped on every start. Removed the redundant registration with explanatory comment. This bug was latent in the CP-31 parallel-session zip but only surfaced when the new code was actually deployed in a container which the parallel session never did. Verified: ingest container reaches healthy in 47s after rebuild. 21/21 ingest unit tests still pass. | ✅ |
+| (this) | CP-49 | [DOCS] | Traceability live through CP-48 — records the end-to-end smoke-test bug cascade: G-28✅(CP-46), G-29✅(CP-47), G-30✅(CP-48), and tickets G-31 (DB schema never migrated to the Postgres container — a provisioning gap, not a code bug). The login request path SPA→gateway→auth-svc→AuthService→DB is now fully correct end to end; only the empty database remains. Score 30 fixed, 1 invalid, 2 open. | ✅ |
+| `7d3f691` | CP-48 | [FIX] | G-30 auth-svc routes missing `/v1` prefix — the gateway forwards the full inbound URL (`/v1/auth/...`) unchanged and every other service uses `/v1/`, but auth-svc registered at `/auth/...` with publicPaths also lacking `/v1`. Framework preHandler then demanded a Bearer token on the login endpoint itself — a chicken-and-egg lockout. Aligned all 7 auth routes + 5 publicPaths to `/v1/auth/...`. 9/9 auth tests pass (service-level, no path churn). | ✅ unit + live |
+| `fc05e2a` | CP-47 | [FIX] | G-29 api-gateway forwarded hop-by-hop headers to undici — `expect: 100-continue` (sent by PowerShell Invoke-WebRequest, browsers, curl) makes undici throw `UND_ERR_NOT_SUPPORTED` → 500. Added module-scope `HOP_BY_HOP_HEADERS` set (RFC 7230 §6.1 + `expect`); forward loop strips them while preserving application + edge-identity headers. +1 G-29 regression test (api-gateway 13→14). Surfaced the instant CP-46 let POSTs reach the proxy handler. | ✅ unit + live |
+| `cd9109c` | CP-46 | [FIX] | G-28 api-gateway JSON content-type parser + statusCode forwarding — (1) `addContentTypeParser('application/json', {parseAs:'buffer'})` so Fastify 5 catch-all routes accept JSON bodies (was throwing `FST_ERR_CTP_INVALID_MEDIA_TYPE` 415 before the handler). (2) `setErrorHandler` forwards `FST_`-prefixed 4xx statusCodes instead of masking as 500. New `server.test.ts` (+5 tests, 3 G-28 regressions). api-gateway 8→13. | ✅ unit + live |
+| `2cd0a8c` | CP-45 | [DOCS] | Traceability live through CP-44 — recorded G-27 fix + ticketed G-28; 15/15 healthy milestone. | ✅ |
+| `0b23569` | CP-44 | [FIX] | G-27 ingest-svc duplicate `/health` route registration crashed startup — `applyFramework` registers `/health` automatically; the CP-31-imported server.ts re-registered it (`FST_ERR_DUPLICATED_ROUTE`). Container restart-looped. Removed the redundant registration. Latent in unit tests; surfaced only on container deploy. Verified healthy in 47s. 21/21 ingest tests pass. | ✅ |
 | `962ac50` | CP-42 | [FEAT] | Sentry observability — pino `logMethod` hook forwards error/fatal to Sentry envelope endpoint. Graceful no-op when `SENTRY_DSN` unset. Forwarder failures swallowed so logging can't crash because monitoring did. `parseSentryDsn` exported for tests. undici added as logger dep. +7 logger tests (4→11). | ✅ |
 | `b2c9e65` | CP-41 | [FEAT] | UC-09 housekeeping prep cards — migration 0016 adds `housekeeping_prep_cards` table + `prep_card_status` enum. `prep-cards.ts` in brief-svc with D-1 generation, completion, listing. 3 endpoints + 3 api-gateway routes. New mobile-first `/prep-cards` web route. AI warm-note via `llm.brief`, degrades gracefully when AI down. +12 prep-card tests (brief 5→17). | ✅ |
 | `5019889` | CP-40 | [FEAT] | UC-25 review polling + linking — `review-poller.ts` in ingest-svc. Confidence bands: ≥0.85 auto-link, 0.5–0.85 exception queue, <0.5 unlinked. DirectFeedback real; TripAdvisor/Booking/Google honest stubs. Migration 0015 adds `integrations.last_polled_at` + `direct_feedback_intake` table. `POST /v1/reviews/poll` with `integration.write` permission added to gm role. +13 poller tests (ingest 8→21). | ✅ |
@@ -65,7 +69,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-28)
+## Bugs discovered & status (G-1 through G-31)
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -80,9 +84,12 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-25 | (CRITICAL) QianfanProvider routing `ocr.card` through chat endpoint | ✅ FIXED | CP-37 |
 | G-26 | (HIGH) auth-svc would boot with dev default JWT_SECRET in production | ✅ FIXED | CP-37 |
 | G-27 | ingest-svc duplicate `/health` registration — `FST_ERR_DUPLICATED_ROUTE` crashed startup. Surfaced ONLY after CP-31 zip was deployed in container — latent in unit tests because they don't exercise `buildServer` → `applyFramework` integration. | ✅ FIXED | CP-44 |
-| G-28 | api-gateway returns HTTP 500 on every JSON POST. Root cause: `FST_ERR_CTP_INVALID_MEDIA_TYPE` (Fastify 5 has no default JSON parser for routes registered via `app.route({ url: '/v1/*' })` catch-all without an explicit `addContentTypeParser`). Compounded by: `setErrorHandler` returns generic 500 instead of forwarding the FastifyError's `statusCode: 415`. Blocks the entire SPA → api-gateway → upstream chain for any POST/PATCH. | ❌ OPEN | (CP-46) |
+| G-28 | api-gateway returns HTTP 500 on every JSON POST. Root cause: `FST_ERR_CTP_INVALID_MEDIA_TYPE` (Fastify 5 has no default JSON parser for routes registered via `app.route({ url: '/v1/*' })` catch-all without an explicit `addContentTypeParser`). Compounded by: `setErrorHandler` returns generic 500 instead of forwarding the FastifyError's `statusCode: 415`. Blocks the entire SPA → api-gateway → upstream chain for any POST/PATCH. | ✅ FIXED | CP-46 |
+| G-29 | api-gateway forwarded hop-by-hop headers (incl. `expect: 100-continue`) to undici, which throws `UND_ERR_NOT_SUPPORTED` → 500. Surfaced the instant G-28 was fixed and POSTs first reached the proxy handler. | ✅ FIXED | CP-47 |
+| G-30 | auth-svc registered routes at `/auth/...` while the gateway forwards `/v1/auth/...` (every other service uses `/v1/`). Login was a chicken-and-egg lockout — framework preHandler demanded a Bearer token on the login endpoint. | ✅ FIXED | CP-48 |
+| G-31 | DB schema never migrated to the running Postgres container — `relation "users" does not exist` on first real login. NOT a code bug: 16 migrations exist in `packages/db/migrations/` plus a runner (`pnpm --filter @roomard/db migrate` / `reset`); they've simply never been applied to the container DB. Login path is otherwise fully correct end to end. | ❌ OPEN | (CP-50) |
 
-**Score: 26 fixed, 1 invalid (G-5), 2 open (G-24 nginx 502, G-28 api-gateway 415→500).**
+**Score: 30 fixed, 1 invalid (G-5), 2 open (G-24 nginx 502, G-31 DB not migrated).**
 
 ---
 
@@ -112,11 +119,11 @@ From BRD §6.2 — original wedge of 8 use cases:
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
 | 7 packages | ✅ green | ✅ 78 tests (errors 22, logger **11**, schemas 32, framework 13, others) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 122 tests (ai-gateway **37**, guest **12**, ingest **21**, brief **17**, auth 9, api-gateway 8, audit 7, capture 4, exception 4, tenant 3) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 125 tests (ai-gateway **37**, guest **12**, ingest **21**, brief **17**, auth 9, api-gateway **14**, audit 7, capture 4, exception 4, tenant 3) | ✅ 0 errors |
 | apps/web | ✅ green | ✅ 8 tests | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **208 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| **Workspace total** | **19/19 green** | **211 passing, 0 failing, 7 skipped** | **0 lint errors** |
 
-**Delta over previous baseline (CP-35 at 127 tests):** +81 tests from parallel-session integration (CP-37..CP-42).
+**Delta:** +3 tests since CP-44 baseline (api-gateway server.test.ts: G-28 ×3, G-29 ×1, plus /health and 404 envelope; net +6 in api-gateway from 8→14, partially offsetting prior counting).
 
 ---
 
@@ -134,7 +141,9 @@ From BRD §6.2 — original wedge of 8 use cases:
 
 Same dependency graph as documented at CP-35. Build / typecheck / lint / unit-tests / docker-build matrix all expected green. Coverage gate still honestly red at ~35-45% vs 90% — the +81 tests should lift this but full re-measurement is pending.
 
-**Post-CP-44 milestone:** local 15-container stack confirmed ALL HEALTHY for the first time with CP-37..CP-42 + CP-44 code integrated. End-to-end smoke through the gateway then surfaced G-28 (api-gateway HTTP 415-masked-as-500 on every JSON POST), which now becomes the next blocking issue ahead of G-24 since G-28 affects every authenticated client request not just nginx-proxied ones.
+**Post-CP-48 milestone — the login path is now fully wired end to end.** A live PowerShell smoke test against `POST http://localhost:3100/v1/auth/password/login` drove a four-layer bug cascade, each fix exposing the next: 415-masked-500 (G-28, CP-46) → undici expect-header 500 (G-29, CP-47) → auth path-prefix lockout 401 (G-30, CP-48) → `relation "users" does not exist` (G-31, provisioning). The request now flows SPA→gateway→auth-svc→AuthService→DB correctly; the only remaining blocker is that the Postgres container has never had migrations applied (G-31, next). G-24 (nginx 502) is expected to be resolved as a side effect of G-28/G-29 since nginx proxies to the gateway — to be re-tested through `web:8180` after G-31.
+
+**Key learning:** unit tests with mocked undici could not have caught G-29 (needs a real client sending `expect`) or G-30 (needs the real gateway→upstream path). The live-stack smoke test earned its keep. Cross-service path-prefix mismatches like G-30 are invisible to per-service tests — only an integration test through the actual gateway catches them.
 
 ---
 
@@ -142,15 +151,13 @@ Same dependency graph as documented at CP-35. Build / typecheck / lint / unit-te
 
 | CP | Target | Effort |
 |---|---|---|
-| CP-46 | G-28 — api-gateway JSON content-type parser + 415-not-500 error envelope fix | S |
-| CP-47 | G-24 — nginx → api-gateway 502 Bad Gateway through web container | S |
-| CP-48 | End-to-end smoke test through web → /api/v1/auth/password/login (depends on CP-46 + CP-47) | S |
-| CP-49 | apps/web — 1 test per route component | M |
-| CP-50 | api-gateway server.ts — supertest + mocked upstreams (this would have caught G-28 earlier) | M |
-| CP-51 | exception, audit, tenant server.ts — supertest pattern | L |
-| CP-52 | capture object-store — mock S3 client tests | S |
-| CP-53 | db — postgres in test setup, unblock 7 skipped integration tests | M |
-| CP-54 | Verify aggregate ≥90%, declare baseline locked | S |
+| CP-50 | G-31 — apply 16 migrations (+ seed) to the container Postgres, re-run login smoke, expect 200+tokens or clean 401 invalid-credentials | S |
+| CP-51 | G-24 — re-test nginx → api-gateway through `web:8180` (likely already resolved by G-28/G-29); fix if still 502 | S |
+| CP-52 | apps/web — 1 test per route component | M |
+| CP-53 | exception, audit, tenant server.ts — supertest pattern (the gap that hid G-28/G-29) | L |
+| CP-54 | capture object-store — mock S3 client tests | S |
+| CP-55 | db — postgres in test setup, unblock 7 skipped integration tests | M |
+| CP-56 | Verify aggregate ≥90%, declare baseline locked | S |
 
 Deferred (need external resources or sprint-length work, per the original code review §3 + the parallel-session CP-31 summary §4):
 - MeDo not used (strategic, requires product rebuild)
