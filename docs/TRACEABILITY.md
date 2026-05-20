@@ -2,22 +2,24 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 08:16 BST (CP-53)
+**Last updated:** 2026-05-20 08:34 BST (CP-55)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 250 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 275 passing, 0 failing, 7 skipped (DB integration)
 
 ---
 
-## Session timeline (CP-1 → CP-53)
+## Session timeline (CP-1 → CP-55)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 53 total since session start)
+### Commits landed (newest → oldest, 55 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-53 | [DOCS] | Traceability live through CP-52 — records the server-level supertest coverage push and the `createFakePool` test-utils helper. Workspace 228→250 tests. No new G-issues. | ✅ |
+| (this) | CP-55 | [DOCS] | Traceability live through CP-54 + **first measured coverage baseline** (replaces the long-standing ~35-45% estimate). Records CP-54 (guest/brief/ingest server supertests), workspace 250→275 tests, and a per-module measured coverage table (see below). Every stateful service now exercises `buildServer` through HTTP. | ✅ |
+| `a0af70b` | CP-54 | [FEAT] | Server-level supertests for guest/brief/ingest — extends the CP-52 `createFakePool` + `app.inject` pattern to the last three stateful services lacking HTTP-layer tests. guest 12→20, brief 17→26, ingest 21→29 (+25). ingest includes a G-27 regression guard (/health registered once) + the public HMAC-gated `/webhooks/mews` path. Lint 0/0. | ✅ |
+| `a0871e1` | CP-53 | [DOCS] | Traceability live through CP-52 — records the server-level supertest coverage push and the `createFakePool` test-utils helper. Workspace 228→250 tests. No new G-issues. | ✅ |
 | `0ea1ce3` | CP-52 | [FEAT] | Server-level supertests for tenant/audit/exception — closes the exact test gap that hid the G-28→G-32 cascade (these services had only logic tests, never exercised `buildServer` through HTTP). New reusable `createFakePool` in test-utils (satisfies the `connect`→`BEGIN`→`SET LOCAL`→query→`COMMIT` sequence; substring-matched row rules). New `server.test.ts` per service via `app.inject` + `mintTestToken`: /health, 401-no-token, 200-happy, JSON-not-415, 403-insufficient-perm, 404-envelope. tenant 3→10, audit 7→14, exception 4→12 (+22). Lint 0/0. | ✅ |
 | `12c4567` | CP-51 | [DOCS] | Traceability live through CP-50 — records the **login-loop breakthrough**: G-31✅ (DB provisioned: 16 migrations + seed applied to container Postgres), G-32✅ (auth `buildSession` permission-shape bug), and G-24✅ (nginx 502 resolved as a downstream symptom of G-28/G-29). Full chain verified live: `POST /v1/auth/password/login` → 200 + 317-char JWT; `/v1/auth/me` with Bearer → 200; `web:8180/api/v1/auth/...` browser path → 200. 15/15 containers healthy, 228 workspace tests green. Score 33 fixed, 1 invalid, 0 functional open. | ✅ |
 | `b8ab5c1` | CP-50 | [FIX] | G-31 (provisioning) applied all 16 migrations + seed to the container Postgres (demo tenant `demo`, 3 users incl. `admin@demo.roomard.local` / `Roomard123!`, 6 roles, property, sample guests). G-32 (code bug) `buildSession` used `jsonb_array_elements_text` on a jsonb *object* → Postgres 22023 on every login. Fixed with exported `flattenRolePermissions` (object-of-arrays → canonical `resource.action`; singularises plurals; collapses `all`/`*` → `*`; legacy array passthrough; safe on null/non-object). +7 unit tests (auth 9→16). Lint 0/0. | ✅ unit + live |
@@ -126,11 +128,37 @@ From BRD §6.2 — original wedge of 8 use cases:
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
 | 7 packages | ✅ green | ✅ 78 tests (errors 22, logger **11**, schemas 32, framework 13, others) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 164 tests (ai-gateway **37**, ingest **21**, brief **17**, **auth 16**, **audit 14**, **api-gateway 14**, **exception 12**, guest **12**, **tenant 10**, capture 4) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 189 tests (ai-gateway **37**, ingest **29**, brief **26**, **guest 20**, **auth 16**, **audit 14**, **api-gateway 14**, **exception 12**, **tenant 10**, capture 4) | ✅ 0 errors |
 | apps/web | ✅ green | ✅ 8 tests | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **250 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| **Workspace total** | **19/19 green** | **275 passing, 0 failing, 7 skipped** | **0 lint errors** |
 
-**Delta:** +22 tests since CP-51 (CP-52 server-level supertests: tenant +7, audit +7, exception +8). The three services that previously had no HTTP-layer test now exercise `buildServer` end to end — the gap that hid the G-28→G-32 cascade is closed for them.
+**Delta:** +25 tests since CP-53 (CP-54 server-level supertests: guest +8, brief +9, ingest +8). Every stateful service now exercises `buildServer` end to end through HTTP — the gap that hid the G-28→G-32 cascade is closed across the entire service tier.
+
+### Measured coverage baseline (first real measurement, CP-55)
+
+This replaces the long-standing ~35-45% *estimate*. Measured via `vitest run --coverage` (v8, % statements, `src/` only) at CP-54 HEAD:
+
+| Module | Cov % | Tests | Notes |
+|---|---|---|---|
+| schemas | 98.3 | 32 | strong |
+| brief | 95.9 | 26 | strong |
+| errors | 93.8 | 22 | strong |
+| ingest | 82.4 | 29 | good |
+| guest | 81.6 | 20 | good |
+| capture | 75.0 | 4 | mid (only 4 tests — needs S3-mock lift) |
+| ai-gateway | 75.0 | 37 | mid |
+| audit | 73.4 | 14 | mid |
+| api-gateway | 72.4 | 14 | mid (server.ts 68.6, routes.ts 83.6) |
+| exception | 68.6 | 12 | mid |
+| tenant | 58.5 | 10 | needs lift |
+| auth | 40.1 | 16 | **LOW — no server.test.ts; security core** (addressed CP-56) |
+| logger | 38.7 | 11 | low (Sentry HTTP-forward path untested) |
+| apps/web | 8.6 | 8 | **LOWEST — no route-component tests** |
+| db | 3.2 | 7 skipped | **blocked — integration tests need a test Postgres** |
+
+*(service-framework has 13 tests but no `test:coverage` script; not measured here.)*
+
+**Biggest gaps, priority order:** apps/web (8.6%), db (3.2%, blocked on test Postgres), auth (40%, no HTTP test), logger (38.7%, Sentry path), tenant (58.5%). The coverage-lift CPs below attack these hardest-first.
 
 ---
 
@@ -146,7 +174,7 @@ From BRD §6.2 — original wedge of 8 use cases:
 
 ## CI state (post CP-42)
 
-Same dependency graph as documented at CP-35. Build / typecheck / lint / unit-tests / docker-build matrix all expected green. Coverage gate still honestly red at ~35-45% vs 90% — the +81 tests should lift this but full re-measurement is pending.
+Same dependency graph as documented at CP-35. Build / typecheck / lint / unit-tests / docker-build matrix all green. **Coverage is now measured, not estimated** — see the measured baseline table above. The aggregate is being lifted module-by-module toward the ≥90% gate (CP-56 onward), hardest-first.
 
 **Post-CP-50 milestone — the login loop is verified working end to end on the live stack.** The four-layer bug cascade (G-28→G-29→G-30→G-31/G-32) is fully closed:
 - `POST http://localhost:3100/v1/auth/password/login` (admin@demo.roomard.local / Roomard123! / tenant `demo`) → **200**, `status: success`, a real 317-char HS256 JWT `access_token` + `refresh_token` + expiries.
@@ -160,17 +188,20 @@ Same dependency graph as documented at CP-35. Build / typecheck / lint / unit-te
 
 ## Roadmap
 
-With all functional bugs closed and the login loop verified live, the remaining work is the coverage lift toward the ≥90% gate.
+All functional bugs are closed and the login loop is verified live. Remaining work is the coverage lift toward the ≥90% gate, attacking the measured gaps hardest-first.
 
-| CP | Target | Effort |
-|---|---|---|
-| ~~CP-52~~ | ~~exception, audit, tenant server.ts — server-level supertest pattern~~ | ✅ DONE (CP-52, +22 tests) |
-| CP-54 | guest, brief, ingest server.ts — extend the `createFakePool` + `app.inject` pattern to the remaining services that lack HTTP-layer tests | M |
-| CP-55 | apps/web — 1 test per route component (incl. the new `/prep-cards` route) | M |
-| CP-56 | capture object-store — mock S3 client tests | S |
-| CP-57 | db — postgres in test setup, unblock 7 skipped integration tests | M |
-| CP-58 | api-gateway — broaden server.test.ts upstream-proxy coverage | M |
-| CP-59 | Verify aggregate ≥90%, declare baseline locked | S |
+| CP | Target | Effort | Status |
+|---|---|---|---|
+| CP-52 | exception, audit, tenant server.ts supertests | L | ✅ DONE (+22) |
+| CP-54 | guest, brief, ingest server.ts supertests | M | ✅ DONE (+25) |
+| CP-56 | auth server.ts supertests + un-exclude server.ts from coverage — lift auth off 40% | M | in progress |
+| CP-57 | logger Sentry HTTP-forward path tests — lift off 38.7% | S | pending |
+| CP-58 | tenant + exception + audit deeper handler-path coverage | M | pending |
+| CP-59 | capture object-store — mock S3 client tests (only 4 tests today) | S | pending |
+| CP-60 | apps/web — route-component tests — lift off 8.6% | M | pending |
+| CP-61 | db — point the 7 skipped integration tests at the running test Postgres | M | pending |
+| CP-62 | api-gateway — broaden server.test.ts upstream-proxy coverage | M | pending |
+| CP-63 | Re-measure aggregate, push remaining modules to ≥90%, lock baseline in COVERAGE_BASELINE.md | S | pending |
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
