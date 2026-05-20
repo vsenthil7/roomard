@@ -6,13 +6,11 @@ import { RateLimitError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
 
 import { MockAiProvider } from './mock-provider.js';
-import { PromptStore } from './prompt-store.js';
 import { QianfanProvider, qianfanConfigFromEnv } from './qianfan-provider.js';
 import type { AiCallInput, AiCallResult, AiProvider, Capability } from './types.js';
 
 export * from './types.js';
 export { MockAiProvider } from './mock-provider.js';
-export { PromptStore, substitute } from './prompt-store.js';
 export { QianfanProvider, qianfanConfigFromEnv } from './qianfan-provider.js';
 
 const log = createLogger({ name: 'ai-gateway' });
@@ -47,8 +45,7 @@ export class AiGateway {
     } else if (cfg.useMock) {
       this.provider = new MockAiProvider();
     } else {
-      const promptStore = new PromptStore(pool);
-      this.provider = new QianfanProvider({ ...qianfanConfigFromEnv(), promptStore });
+      this.provider = new QianfanProvider(qianfanConfigFromEnv());
     }
   }
 

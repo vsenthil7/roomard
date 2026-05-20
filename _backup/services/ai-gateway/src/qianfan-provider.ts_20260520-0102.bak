@@ -2,8 +2,6 @@ import { IntegrationError, ServiceUnavailableError } from '@roomard/errors';
 import { createLogger } from '@roomard/logger';
 import { request } from 'undici';
 
-import type { PromptStore } from './prompt-store.js';
-import { substitute } from './prompt-store.js';
 import type { AiCallInput, AiCallResult, AiProvider, Capability } from './types.js';
 import { hashPayload } from './types.js';
 
@@ -26,12 +24,6 @@ interface QianfanConfig {
    * the network.
    */
   httpRequest?: typeof request;
-  /**
-   * Optional prompt store. When supplied, the provider prefers DB-stored
-   * active prompt versions over hardcoded defaults. Falls back to hardcoded
-   * when no active version is registered or the store lookup fails.
-   */
-  promptStore?: PromptStore;
 }
 
 interface ChatResponse {
@@ -72,11 +64,9 @@ export class QianfanProvider implements AiProvider {
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
   private readonly http: typeof request;
-  private readonly promptStore: PromptStore | undefined;
 
   constructor(private readonly cfg: QianfanConfig) {
     this.http = cfg.httpRequest ?? request;
-    this.promptStore = cfg.promptStore;
   }
 
   private async getAccessToken(): Promise<string> {
@@ -186,10 +176,7 @@ export class QianfanProvider implements AiProvider {
     const start = Date.now();
     const inputHash = hashPayload(input.payload);
     const token = await this.getAccessToken();
-    const { modelId, body, promptVersion } = await this.buildChatRequest(
-      input.capability,
-      input.payload,
-    );
+    const { modelId, body } = this.buildChatRequest(input.capability, input.payload);
 
     try {
       const url = `${this.cfg.baseUrl}/wenxinworkshop/chat/${modelId}?access_token=${token}`;
@@ -213,7 +200,6 @@ export class QianfanProvider implements AiProvider {
       return {
         output: output as T,
         modelId,
-        promptVersion,
         latencyMs,
         inputTokens: json.usage?.prompt_tokens ?? 0,
         outputTokens: json.usage?.completion_tokens ?? 0,
@@ -230,47 +216,10 @@ export class QianfanProvider implements AiProvider {
     }
   }
 
-  /**
-   * Compose the chat request body. Prefers DB-stored active prompt versions
-   * when a PromptStore is configured; falls back to hardcoded defaults
-   * otherwise. The hardcoded defaults are the documented v1 contract.
-   *
-   * Template-name mapping (kept stable so DB rows can be seeded):
-   *   llm.brief        → "brief.generation"
-   *   llm.review_link  → "review.link"
-   *   llm.reasoning    → "reasoning.general"
-   */
-  private async buildChatRequest(
+  private buildChatRequest(
     cap: Capability,
     payload: unknown,
-  ): Promise<{ modelId: string; body: Record<string, unknown>; promptVersion: string }> {
-    const templateName = templateNameFor(cap);
-    if (this.promptStore && templateName) {
-      const version = await this.promptStore.getActive(templateName);
-      if (version) {
-        const vars = payload as Record<string, unknown>;
-        const messages: Array<{ role: string; content: string }> = [];
-        if (version.systemPrompt) {
-          messages.push({ role: 'system', content: substitute(version.systemPrompt, vars) });
-        }
-        messages.push({ role: 'user', content: substitute(version.userPrompt, vars) });
-        return {
-          modelId: version.modelId,
-          body: {
-            messages,
-            ...version.parameters,
-          },
-          promptVersion: `${templateName}:${version.versionLabel}`,
-        };
-      }
-    }
-    return this.hardcodedChatRequest(cap, payload);
-  }
-
-  private hardcodedChatRequest(
-    cap: Capability,
-    payload: unknown,
-  ): { modelId: string; body: Record<string, unknown>; promptVersion: string } {
+  ): { modelId: string; body: Record<string, unknown> } {
     switch (cap) {
       case 'ocr.card':
         // Unreachable — invoke() routes ocr.card to invokeOcr. Kept exhaustive
@@ -279,7 +228,6 @@ export class QianfanProvider implements AiProvider {
       case 'llm.brief':
         return {
           modelId: this.cfg.modelLlm,
-          promptVersion: 'brief.generation:hardcoded-v1',
           body: {
             messages: [
               {
@@ -296,7 +244,6 @@ export class QianfanProvider implements AiProvider {
       case 'llm.review_link':
         return {
           modelId: this.cfg.modelLlm,
-          promptVersion: 'review.link:hardcoded-v1',
           body: {
             messages: [
               {
@@ -313,7 +260,6 @@ export class QianfanProvider implements AiProvider {
       case 'llm.reasoning':
         return {
           modelId: this.cfg.modelReasoning,
-          promptVersion: 'reasoning.general:hardcoded-v1',
           body: {
             messages: [{ role: 'user', content: (payload as { prompt: string }).prompt }],
           },
@@ -377,24 +323,6 @@ function estimateChatCost(
   const inputRate = modelId.includes('x1') ? 12 : modelId.includes('4.5') ? 8 : 4;
   const outputRate = modelId.includes('x1') ? 48 : modelId.includes('4.5') ? 24 : 12;
   return Math.round((inT * inputRate + outT * outputRate) / 1000);
-}
-
-/**
- * Stable mapping from internal capability to prompt_templates.name.
- * Keep these strings stable forever — DB rows reference them.
- * ocr.card is OCR, handled outside the chat path, so returns null.
- */
-function templateNameFor(cap: Capability): string | null {
-  switch (cap) {
-    case 'ocr.card':
-      return null;
-    case 'llm.brief':
-      return 'brief.generation';
-    case 'llm.review_link':
-      return 'review.link';
-    case 'llm.reasoning':
-      return 'reasoning.general';
-  }
 }
 
 function estimateOcrCost(rawTextLen: number): number {
