@@ -52,3 +52,17 @@ secrets/
 tmp/
 .cache/
 _session/
+_backup/
+__pycache__/
+*.pyc
+
+# Demo video pipeline (keep mp4 deliverables + verification reports; ignore the rest)
+demovideo/.runner/
+demovideo/results/creation/latest.txt
+demovideo/verification-b/frames/
+demo/_backup/
+demo/*.webm
+
+# Submission media (keep pdf/pptx/png deliverables + verification reports; ignore working dirs)
+submission_media/_backup/
+submission_media/verification-b/pages/

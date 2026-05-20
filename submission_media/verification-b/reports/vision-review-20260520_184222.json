@@ -1,0 +1,105 @@
+{
+  "pages": 12,
+  "rubric": [
+    {
+      "rubric": "slide-1-title",
+      "passed": true,
+      "needles": [
+        "Roomard",
+        "guest-memory"
+      ]
+    },
+    {
+      "rubric": "slide-2-problem",
+      "passed": true,
+      "needles": [
+        "problem",
+        "boutique"
+      ]
+    },
+    {
+      "rubric": "slide-3-solution",
+      "passed": true,
+      "needles": [
+        "CAPTURE",
+        "BRIEF",
+        "PREPARE"
+      ]
+    },
+    {
+      "rubric": "slide-4-use-cases",
+      "passed": true,
+      "needles": [
+        "wedge",
+        "UC-07",
+        "UC-29"
+      ]
+    },
+    {
+      "rubric": "slide-5-ai",
+      "passed": true,
+      "needles": [
+        "PaddleOCR",
+        "ERNIE",
+        "Qianfan"
+      ]
+    },
+    {
+      "rubric": "slide-6-demo",
+      "passed": true,
+      "needles": [
+        "Live demo",
+        "CARD CAPTURE"
+      ]
+    },
+    {
+      "rubric": "slide-7-proof",
+      "passed": true,
+      "needles": [
+        "356",
+        "findings fixed"
+      ]
+    },
+    {
+      "rubric": "slide-8-architecture",
+      "passed": true,
+      "needles": [
+        "Architecture",
+        "FRONTEND"
+      ]
+    },
+    {
+      "rubric": "slide-9-trust",
+      "passed": true,
+      "needles": [
+        "trustworthy",
+        "security"
+      ]
+    },
+    {
+      "rubric": "slide-10-next",
+      "passed": true,
+      "needles": [
+        "ships next",
+        "Platform"
+      ]
+    },
+    {
+      "rubric": "slide-11-team",
+      "passed": true,
+      "needles": [
+        "ask",
+        "Qianfan"
+      ]
+    },
+    {
+      "rubric": "slide-12-closing",
+      "passed": true,
+      "needles": [
+        "Every preference",
+        "roomard"
+      ]
+    }
+  ],
+  "pass_rate": 1.0
+}

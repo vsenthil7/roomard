@@ -1,0 +1,326 @@
+{
+  "summary": {
+    "pdf": "C:\\Users\\v_sen\\Documents\\Projects\\0009_AT_Hack0019_Roomard\\roomard\\submission_media\\roomard-pitch-deck-20260520_183129.pdf",
+    "pdf_size_kb": 388.0,
+    "page_count": 12,
+    "page_texts_preview": {
+      "1": "at-hack0019 \u00b7 baidu build with medo 2026 | roomard | the ai guest-memory engine. | for boutique hotels. capture every preference. brief every shift. prepare every roo...",
+      "2": "at-hack0019 \u00b7 baidu build with medo 2026 | the problem | boutique hotels run on memory that walks out the door. | a returning guest's pillow preference, the allergy f...",
+      "3": "at-hack0019 \u00b7 baidu build with medo 2026 | the solution | one memory engine. three moments that matter. | capture | handwritten check-in cards, concierge emails, pms  | r...",
+      "4": "at-hack0019 \u00b7 baidu build with medo 2026 | the mvp wedge | eight use cases. seven built. one honest stub. | uc-07 | daily arrival brief | 90% | uc-01 | handwritten card captu...",
+      "5": "at-hack0019 \u00b7 baidu build with medo 2026 | the ai stack | sponsor models, routed through one gateway. | paddleocr-vl | layout-aware ocr | handwritten check-in cards \u2192 tex...",
+      "6": "at-hack0019 \u00b7 baidu build with medo 2026 | live demo \u00b7 4 stages | what you will see in the walkthrough. | 1 | daily arrival brief (uc-07) | front-desk manager signs in an...",
+      "7": "at-hack0019 \u00b7 baidu build with medo 2026 | proof, not promises | engineering rigour you can re-run. | 356 | unit tests pass | 12 | db integration tests (live pg) | 87.5 % | mea...",
+      "8": "at-hack0019 \u00b7 baidu build with medo 2026 | architecture | a typed monorepo. ten services. one edge. | frontend | react 18 \u00b7 tanstack router \u00b7 vite \u00b7 tailwind (pwa) | offl...",
+      "9": "at-hack0019 \u00b7 baidu build with medo 2026 | why this is trustworthy | multi-tenant and audit-grade from line one. | row-level security, proven live | rls is forced on ev...",
+      "10": "at-hack0019 \u00b7 baidu build with medo 2026 | what ships next | from wedge to platform. | close the wedge | \u00b7  real review-api adapters (tripadvisor / booking / google) | \u00b7 ...",
+      "11": "at-hack0019 \u00b7 baidu build with medo 2026 | team + ask | built for the baidu build with medo hackathon. | founder + lead engineer \u00b7 product, architecture, full-stack b...",
+      "12": "at-hack0019 \u00b7 baidu build with medo 2026 | roomard | every preference remembered. | capture. brief. prepare. multi-tenant, rls-enforced, audit-grade by default. | githu..."
+    }
+  },
+  "results": [
+    {
+      "id": "A0.1",
+      "label": "pdf opens cleanly",
+      "passed": true,
+      "detail": "is_pdf=True"
+    },
+    {
+      "id": "A0.2",
+      "label": "page count == 12",
+      "passed": true,
+      "detail": "got 12, want 12"
+    },
+    {
+      "id": "A0.3",
+      "label": "page 1 width ~= 960 pts (16:9)",
+      "passed": true,
+      "detail": "got 960.00"
+    },
+    {
+      "id": "A0.4",
+      "label": "page 1 height ~= 540 pts",
+      "passed": true,
+      "detail": "got 540.00"
+    },
+    {
+      "id": "B1.1",
+      "label": "page 1 contains 'roomard'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.2",
+      "label": "page 1 contains 'guest-memory'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.3",
+      "label": "page 1 contains 'medo'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.1",
+      "label": "page 2 contains 'the problem'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.2",
+      "label": "page 2 contains 'memory'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.3",
+      "label": "page 2 contains 'boutique'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.1",
+      "label": "page 3 contains 'the solution'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.2",
+      "label": "page 3 contains 'capture'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.3",
+      "label": "page 3 contains 'brief'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.4",
+      "label": "page 3 contains 'prepare'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.1",
+      "label": "page 4 contains 'mvp wedge'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.2",
+      "label": "page 4 contains 'uc-07'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.3",
+      "label": "page 4 contains 'uc-01'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.4",
+      "label": "page 4 contains 'uc-08'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.5",
+      "label": "page 4 contains 'uc-29'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.1",
+      "label": "page 5 contains 'ai stack'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.2",
+      "label": "page 5 contains 'paddleocr-vl'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.3",
+      "label": "page 5 contains 'ernie 4.5'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.4",
+      "label": "page 5 contains 'ernie x1'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.5",
+      "label": "page 5 contains 'qianfan'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.1",
+      "label": "page 6 contains 'live demo'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.2",
+      "label": "page 6 contains 'daily arrival brief'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.3",
+      "label": "page 6 contains 'guest lookup'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.4",
+      "label": "page 6 contains 'card capture'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.5",
+      "label": "page 6 contains 'exception'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.1",
+      "label": "page 7 contains 'proof'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.2",
+      "label": "page 7 contains '356'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.3",
+      "label": "page 7 contains '87.5'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.4",
+      "label": "page 7 contains '39'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.1",
+      "label": "page 8 contains 'architecture'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.2",
+      "label": "page 8 contains 'frontend'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.3",
+      "label": "page 8 contains 'data'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.4",
+      "label": "page 8 contains 'postgres'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.1",
+      "label": "page 9 contains 'trustworthy'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.2",
+      "label": "page 9 contains 'row-level security'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.3",
+      "label": "page 9 contains 'audit'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.4",
+      "label": "page 9 contains 'degradation'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.1",
+      "label": "page 10 contains 'what ships next'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.2",
+      "label": "page 10 contains 'close the wedge'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.3",
+      "label": "page 10 contains 'platform'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.1",
+      "label": "page 11 contains 'team'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.2",
+      "label": "page 11 contains 'ask'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.3",
+      "label": "page 11 contains 'qianfan'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.1",
+      "label": "page 12 contains 'roomard'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.2",
+      "label": "page 12 contains 'every preference remembered'",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.3",
+      "label": "page 12 contains 'github.com/vsenthil7/roomard'",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "passed": 50,
+  "total": 50,
+  "pass_rate": 1.0
+}

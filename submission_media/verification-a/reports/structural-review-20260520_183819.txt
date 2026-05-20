@@ -1,0 +1,58 @@
+[verify-a] === Roomard Pitch Deck . Structural review ===
+
+pdf      : C:\Users\v_sen\Documents\Projects\0009_AT_Hack0019_Roomard\roomard\submission_media\roomard-pitch-deck-20260520_183129.pdf
+size     : 388.0 KB
+pages    : 12
+
+assertions: 50/50 PASS (100 %)
+
+  [PASS] A0.1  pdf opens cleanly
+  [PASS] A0.2  page count == 12
+  [PASS] A0.3  page 1 width ~= 960 pts (16:9)
+  [PASS] A0.4  page 1 height ~= 540 pts
+  [PASS] B1.1  page 1 contains 'roomard'
+  [PASS] B1.2  page 1 contains 'guest-memory'
+  [PASS] B1.3  page 1 contains 'medo'
+  [PASS] B2.1  page 2 contains 'the problem'
+  [PASS] B2.2  page 2 contains 'memory'
+  [PASS] B2.3  page 2 contains 'boutique'
+  [PASS] B3.1  page 3 contains 'the solution'
+  [PASS] B3.2  page 3 contains 'capture'
+  [PASS] B3.3  page 3 contains 'brief'
+  [PASS] B3.4  page 3 contains 'prepare'
+  [PASS] B4.1  page 4 contains 'mvp wedge'
+  [PASS] B4.2  page 4 contains 'uc-07'
+  [PASS] B4.3  page 4 contains 'uc-01'
+  [PASS] B4.4  page 4 contains 'uc-08'
+  [PASS] B4.5  page 4 contains 'uc-29'
+  [PASS] B5.1  page 5 contains 'ai stack'
+  [PASS] B5.2  page 5 contains 'paddleocr-vl'
+  [PASS] B5.3  page 5 contains 'ernie 4.5'
+  [PASS] B5.4  page 5 contains 'ernie x1'
+  [PASS] B5.5  page 5 contains 'qianfan'
+  [PASS] B6.1  page 6 contains 'live demo'
+  [PASS] B6.2  page 6 contains 'daily arrival brief'
+  [PASS] B6.3  page 6 contains 'guest lookup'
+  [PASS] B6.4  page 6 contains 'card capture'
+  [PASS] B6.5  page 6 contains 'exception'
+  [PASS] B7.1  page 7 contains 'proof'
+  [PASS] B7.2  page 7 contains '356'
+  [PASS] B7.3  page 7 contains '87.5'
+  [PASS] B7.4  page 7 contains '39'
+  [PASS] B8.1  page 8 contains 'architecture'
+  [PASS] B8.2  page 8 contains 'frontend'
+  [PASS] B8.3  page 8 contains 'data'
+  [PASS] B8.4  page 8 contains 'postgres'
+  [PASS] B9.1  page 9 contains 'trustworthy'
+  [PASS] B9.2  page 9 contains 'row-level security'
+  [PASS] B9.3  page 9 contains 'audit'
+  [PASS] B9.4  page 9 contains 'degradation'
+  [PASS] B10.1  page 10 contains 'what ships next'
+  [PASS] B10.2  page 10 contains 'close the wedge'
+  [PASS] B10.3  page 10 contains 'platform'
+  [PASS] B11.1  page 11 contains 'team'
+  [PASS] B11.2  page 11 contains 'ask'
+  [PASS] B11.3  page 11 contains 'qianfan'
+  [PASS] B12.1  page 12 contains 'roomard'
+  [PASS] B12.2  page 12 contains 'every preference remembered'
+  [PASS] B12.3  page 12 contains 'github.com/vsenthil7/roomard'
