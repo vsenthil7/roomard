@@ -2,22 +2,26 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 11:52 BST (CP-71)
+**Last updated:** 2026-05-20 13:19 BST (CP-75)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 343 passing, 0 failing (workspace unit suites); **+8 DB integration tests now passing** when run with `DATABASE_URL` set (no longer skipped)
+**Total tests:** 356 passing, 0 failing (workspace unit suites); **+8 DB integration tests** passing with `DATABASE_URL` set
 
 ---
 
-## Session timeline (CP-1 → CP-71)
+## Session timeline (CP-1 → CP-75)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 71 total since session start)
+### Commits landed (newest → oldest, 75 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-71 | [DOCS] | Traceability live through CP-70 — the DB-integration unblock. Records CP-69 (**G-35** production fix) + CP-70 (db integration enablement, **G-34** schema drift + **G-36** RLS/provisioning finding). All 8 db integration tests now pass against the live Postgres. Score 37 fixed, 1 invalid, 1 open (G-36 infra). | ✅ |
+| (this) | CP-75 | [DOCS] | Traceability live through CP-74 — the mid-70s service lift + a third schema-drift fix. Records CP-72 (ai-gateway facade, 75→91%), CP-73 (auth refresh rotation, 75→82%), CP-74 (**G-37** audit schema-drift production fix). Score 38 fixed, 1 invalid, 1 open (G-36). | ✅ |
+| `2d13181` | CP-74 | [FIX] | **G-37** (production bug) — audit service written against an imagined `audit_events` schema (`hash`/`resource_type`/`payload_hash`/`actor_label`); real cols are `event_hash`/`resource_kind`/`detail`/`actor_display`. `SELECT hash` and `WHERE resource_type` both error against live PG — the audit query + verify-chain endpoints would 500 in production. Aligned `AuditRow`; rewrote `verifyChain` to re-derive the hash IN SQL (exact migration-0011 recipe via LAG window) so it byte-matches the trigger; `queryEvents` filter → `resource_kind`. Validated against live PG (45/45 seed chain rows verify). audit 16→19 tests. | ✅ live PG |
+| `9ce873a` | CP-73 | [FEAT] | auth refresh-rotation server tests — the existing suite covered login/mfa/me/logout + refresh-401 but never the rotation success path. Added refresh-success (drives FOR UPDATE select → buildSession → issueTokensWithinTx → new-token INSERT + replaced_by UPDATE) + refresh-revoked-reuse-detection. auth 30→32 tests; **74.6→81.5%** (server.ts 63→73, service.ts 79→85). | ✅ |
+| `c4d20ee` | CP-72 | [FEAT] | ai-gateway `AiGateway` facade tests — index.ts was 0% (real orchestration, not a floor). Added test-utils dep; covers provider selection (mock/override), invoke success+failure logging path, per-minute + daily cap enforcement (RateLimitError), `gatewayConfigFromEnv`. ai-gateway 37→45 tests; **75.0→91.3%** (index.ts 0→95). | ✅ |
+| `f6e8e66` | CP-71 | [DOCS] | Traceability live through CP-70 — the DB-integration unblock. Records CP-69 (**G-35**) + CP-70 (**G-34** + **G-36**). All 8 db integration tests pass against live PG. Score 37 fixed, 1 invalid, 1 open. | ✅ |
 | `aafa16f` | CP-70 | [FEAT] | Enable the 7 (now 8) skipped db integration tests against the live container Postgres; fix the schema drift they exposed (**G-34**) and rewrite the RLS test to genuinely verify isolation via a restricted role (**G-36**). 4 rls + 4 audit tests green with `DATABASE_URL` set; remain gated (skip cleanly) without it. | ✅ live PG |
 | `58a991c` | CP-69 | [FIX] | **G-35** (production bug) — `tenant-context.applyContext` used `SET LOCAL app.x = $1` with bind params; Postgres `SET` rejects `$1` → every `withTenantContext` call would throw against real Postgres. Latent because unit tests use `createFakePool` (never parses SET). Rewrote to `SELECT set_config($1,$2,$3)`. 343 workspace tests unchanged (fake-pool compatible); validated against live PG. | ✅ live PG |
 | `13c8f9a` | CP-68 | [DOCS] | Traceability live through CP-67 — finishes the apps/web lift + the api-gateway lift. Records CP-65 (captures.new + prep-cards forms, →86.6%), CP-66 (useOfflineReplay hook →100%, web →89.3%), CP-67 (api-gateway authenticated-proxy + RBAC tests, 72→79%). Workspace 328→343 tests. | ✅ |
@@ -90,7 +94,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-36)
+## Bugs discovered & status (G-1 through G-37)
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -114,8 +118,9 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-34 | DB integration tests carried **schema drift** — written against an imagined schema and never run (skipped on missing `DATABASE_URL`), so the drift was invisible. Real mismatches: tenant seed used `legal_name` (real col `name`) and tier `'starter'` (invalid; enum is `property/group_starter/group/enterprise`); audit assertions used `hash`/`resource_type` (real cols `event_hash`/`resource_kind`); `operation` for an insert is `'create'` not `'insert'`; `event_hash` is `bytea` (32 raw bytes, not 64 hex chars) so Buffer comparison needs `toStrictEqual`; request IDs were non-UUID strings but the GUC + `assertUuid` require UUIDs. All corrected to match the real schema. | ✅ FIXED | CP-70 |
 | G-35 | (PRODUCTION BUG) `tenant-context.applyContext` set the per-transaction RLS/audit GUCs with `SET LOCAL app.x = $1` using **bind parameters** — but Postgres `SET`/`SET LOCAL` only accept literals, not `$1`, so every statement throws `syntax error at or near "$1"` against a real server. This means **every** `withTenantContext`/`withReadOnlyTenantContext` call (the wrapper all tenant-scoped reads/writes use) would have failed at runtime against real Postgres. Stayed latent because the entire unit suite uses `createFakePool`, which never parses SET syntax; the live login path (CP-50) worked only because `buildSession` uses raw pool queries, not the wrapper. Fixed to `SELECT set_config($1,$2,$3)` (the parameterisable function form; `is_local` mirrors SET LOCAL). The `withReadOnlyTenantContext` cleanup path already used `set_config` — this aligns the apply path with it. Surfaced only by running the db integration tests against live Postgres. | ✅ FIXED | CP-69 |
 | G-36 | (SECURITY / PROVISIONING) RLS is enabled **and FORCED** on `guests` (`relrowsecurity=t, relforcerowsecurity=t`), but the app's `roomard` DB role is `rolsuper=t, rolbypassrls=t` — a superuser with BYPASSRLS **ignores RLS entirely, even under FORCE**. So in the dev/CI container, multi-tenant RLS isolation is **not actually enforced**. The RLS test was rewritten to provision a restricted `roomard_rls_test` role (NOSUPERUSER NOBYPASSRLS) and prove isolation genuinely through it, plus a test that documents the current bypass. **Remediation is an infra/provisioning change**: the application must connect to production Postgres as a non-superuser, non-BYPASSRLS role, or RLS provides no protection. | 🔶 OPEN (infra) | — |
+| G-37 | (PRODUCTION BUG) The **audit service** (`services/audit/src/service.ts`) was written against an IMAGINED `audit_events` schema — its `AuditRow`, `computeHash`, and the verify/query SQL referenced `hash`, `resource_type`, `payload_hash`, `actor_label`. The REAL columns (migration 0011) are `event_hash` (bytea), `resource_kind`, `actor_display`, `detail` (jsonb) — and there is **no** `payload_hash`. Proven against the live DB: `SELECT hash FROM audit_events` → `column "hash" does not exist`; `SELECT resource_type` → same. So the audit query endpoint (`/v1/audit/events` with a `resourceType` filter) AND the verify-chain endpoint (`/v1/audit/verify`, `/export`) would **500 in production**. Same drift class as G-34, caught the same way — checking the service code against the live schema. Fixed: aligned `AuditRow` (`event_hash`/`previous_hash` typed as `Buffer`); rewrote `verifyChain` to re-derive each row's hash **in SQL** using the exact migration-0011 `audit_compute_hash` recipe (`digest(concat_ws('|', …, occurred_at::text, encode(prev,'hex')), 'sha256')`) via a `LAG` window — doing it in SQL is the only way to byte-match Postgres's `occurred_at::text` rendering, which the old JS `toISOString()` recompute never could; `queryEvents` filter → `resource_kind`. Validated against live PG: all 45 cleanly-seeded chain rows verify (`hash_ok` + `link_ok`); the 5 that don't are this session's own integration-test rapid cross-tenant inserts with ambiguous same-timestamp ordering — a test-data artefact the verifier correctly flags, not a recipe error. | ✅ FIXED | CP-74 |
 
-**Score: 37 fixed, 1 invalid (G-5), 1 open (G-36 — infra/provisioning, not a code defect).**
+**Score: 38 fixed, 1 invalid (G-5), 1 open (G-36 — infra/provisioning, not a code defect).**
 
 The login path is now demonstrably working end to end on the live 15-container stack — a user can authenticate through the browser-facing nginx route and receive a working JWT that the gateway accepts on protected endpoints.
 
@@ -147,15 +152,15 @@ From BRD §6.2 — original wedge of 8 use cases:
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
 | 7 packages | ✅ green | ✅ 87 tests (errors 22, logger 20, schemas 32, framework 13) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 217 tests (ai-gateway 37, auth 30, ingest 29, brief 26, guest 20, **api-gateway 18**, audit 16, exception 15, tenant 14, capture 12) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 230 tests (ai-gateway 45, auth 32, ingest 29, brief 26, guest 20, **audit 19**, api-gateway 18, exception 15, tenant 14, capture 12) | ✅ 0 errors |
 | apps/web | ✅ green | ✅ **39 tests** | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **343 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| **Workspace total** | **19/19 green** | **356 passing, 0 failing** (+ 8 DB integration, `DATABASE_URL`-gated) | **0 lint errors** |
 
-**Delta:** +68 tests across the full coverage-lift run (CP-56→CP-67). Services lifted: auth 40→75, logger 39→100, tenant/exception/audit, capture 75→98, api-gateway 72→79. apps/web lifted 8.6→89.3 across CP-61→CP-66 (8→39 tests). One real bug (G-33) found and fixed while doing it.
+**Delta:** +13 tests across the CP-72→CP-74 mid-70s lift (ai-gateway +8 →91%, auth +2 →82%, audit +3 incl. the G-37 rewrite). Across the whole CP-56→CP-74 run, +81 tests and **three production-grade bugs** found by chasing real coverage / live-DB integration: G-33 (dead Sentry forwarder), G-35 (SET-bind-param breaks every tenant-scoped query), G-37 (audit schema drift would 500 the compliance endpoints) — plus the G-36 security finding. None were visible to the mocked unit suite.
 
-### Measured coverage — post-lift (CP-68)
+### Measured coverage — post-lift (CP-74)
 
-Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was** column is the CP-55 baseline; **Now** is after the CP-56→CP-67 lift.
+Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was** column is the CP-55 baseline; **Now** is after the CP-56→CP-74 lift run.
 
 | Module | Was | Now | Tests | Notes |
 |---|---|---|---|---|
@@ -170,14 +175,14 @@ Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was*
 | tenant | 58.5 | **81.1** | 10→14 | ↑ CP-58 (only `start()` left) |
 | api-gateway | 72.4 | **79.3** | 14→18 | ↑ CP-67 (server.ts 77.8; only validation branch + `start()` left) |
 | exception | 68.6 | **77.7** | 12→15 | ↑ CP-58 |
-| audit | 73.4 | **75.7** | 14→16 | ↑ CP-58 (server.ts 78; verifyChain needs DB integration) |
-| auth | 40.1 | **74.6** | 16→30 | ↑ CP-56 (service.ts 79, server.ts 63) |
-| ai-gateway | 75.0 | 75.0 | 37 | mid |
+| audit | 73.4 | **75.1** | 14→19 | ↑ CP-58, **G-37 fixed CP-74** (verifyChain re-derives hash in SQL; flat % as that CP was a fix, not a lift) |
+| auth | 40.1 | **81.5** | 16→32 | ↑ CP-56 + **CP-73** (refresh rotation; service.ts 85, server.ts 73) |
+| ai-gateway | 75.0 | **91.3** | 37→45 | ↑ **CP-72** (AiGateway facade index.ts 0→95) |
 | db | 3.2 | 3.2 (unit) | **8 integration** | **un-skipped CP-69/70** — 4 RLS + 4 audit pass against live Postgres (G-35 fix validated; RLS proven via restricted role per G-36). v8 line-coverage of `src/` still reads low because integration tests run as a separate `DATABASE_URL`-gated suite, but the tenant-context + RLS + audit-chain paths are now genuinely exercised end-to-end. |
 
 *(service-framework has 13 tests but no `test:coverage` script; not measured here.)*
 
-**What's left:** ai-gateway (75%) + the mid-70s services (auth, audit, exception, guest, ingest) have remaining branches to lift where unit-testable. The recurring **legitimate floors**, flagged honestly rather than padded: every service's `start()` (binds a port — needs a live listen), apps/web `main.tsx` (ReactDOM mount + PWA SW registration — runs only in a real browser), and audit's `verifyChain` hash-chain logic (now partially de-risked by the db audit-chain integration test, but full verifyChain coverage still wants real linked rows). The one **open security item** is G-36: production DB provisioning must use a non-superuser, non-BYPASSRLS role or RLS is inert. 100% on the floored units isn't achievable without external infra; stated plainly rather than faked.
+**What's left:** the mid-70s services (audit 75, exception 78, guest 82, ingest 82, tenant 81) have remaining branches to lift where unit-testable. The recurring **legitimate floors**, flagged honestly rather than padded: every service's `start()` (binds a port — needs a live listen), apps/web `main.tsx` (ReactDOM mount + PWA SW registration — runs only in a real browser), auth's mfa-verify success body (needs a live TOTP code), and the QianfanProvider constructor branch (needs real qianfan env). The one **open security item** is G-36: production DB provisioning must use a non-superuser, non-BYPASSRLS role or RLS is inert. 100% on the floored units isn't achievable without external infra; stated plainly rather than faked.
 
 ---
 
@@ -225,9 +230,12 @@ All functional bugs are closed and the login loop is verified live. Remaining wo
 | CP-67 | api-gateway — authenticated-proxy + RBAC server tests | M | ✅ DONE (72→79%) |
 | CP-69 | **G-35** production fix — `applyContext` SET-bind-param bug | S | ✅ DONE (live PG) |
 | CP-70 | db integration enablement — G-34 schema drift + G-36 RLS rewrite | M | ✅ DONE (8/8 db tests) |
-| CP-72 | ai-gateway + mid-70s services (auth/audit/exception/guest/ingest) — lift remaining unit-testable branches to ≥90% | M | next |
-| CP-73 | Re-measure aggregate; lock the baseline in COVERAGE_BASELINE.md | S | pending |
-| CP-74 | (infra) **G-36** remediation — provision the app DB role as NOSUPERUSER NOBYPASSRLS so RLS enforces in the live stack | M | pending (infra) |
+| CP-72 | ai-gateway `AiGateway` facade tests (index.ts 0→95) | M | ✅ DONE (75→91%) |
+| CP-73 | auth refresh-rotation server tests | S | ✅ DONE (75→82%) |
+| CP-74 | **G-37** audit schema-drift production fix (verifyChain → SQL recompute) | M | ✅ DONE (live PG) |
+| CP-76 | Lock the measured baseline in `COVERAGE_BASELINE.md` (per-module %, the floors, the 8 db integration tests) | S | next |
+| CP-77 | (infra) **G-36** remediation — provision the app DB role as NOSUPERUSER NOBYPASSRLS so RLS enforces in the live stack | M | pending (infra) |
+| CP-78 | (optional) lift the remaining mid-70s unit-testable branches — exception/guest/ingest | M | optional |
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
