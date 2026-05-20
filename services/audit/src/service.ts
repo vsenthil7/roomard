@@ -1,11 +1,24 @@
 /**
  * Audit query, hash-chain verification, and export-pack generation.
  *
- * Hash chain (per migration 0011): each row's `hash` = sha256(
- *   id || occurred_at || tenant_id || actor_kind || actor_id || operation ||
- *   resource_type || resource_id || data_class || payload_hash || previous_hash
- * ). The chain is per-tenant: `previous_hash` is the last row's hash for
- * the same tenant. Verification re-hashes each row and asserts the chain.
+ * G-37 — this module was written against an IMAGINED audit_events schema
+ * (`hash`, `resource_type`, `payload_hash`, `actor_label`). The REAL columns
+ * (migration 0011) are `event_hash` (bytea), `resource_kind`, `actor_display`,
+ * `detail` (jsonb) — and there is no `payload_hash`. The drift made the query
+ * and verify endpoints throw `column "..." does not exist` against real Postgres.
+ * Aligned below.
+ *
+ * Hash chain (migration 0011 `audit_compute_hash` trigger): per-tenant,
+ *   event_hash = digest(concat_ws('|',
+ *     id, tenant_id, actor_kind, actor_id(''), operation, resource_kind,
+ *     resource_id(''), data_class(''), occurred_at::text,
+ *     encode(previous_hash, 'hex')('')
+ *   ), 'sha256')
+ * stored as bytea. Crucially the trigger uses Postgres `occurred_at::text` and
+ * `concat_ws`, so re-deriving the hash in JS would have to byte-match Postgres's
+ * timestamp rendering — brittle. `verifyChain` therefore re-derives the hash
+ * IN SQL using the identical expression and compares to the stored event_hash,
+ * which is exact by construction.
  */
 import { createHash } from 'node:crypto';
 
@@ -17,32 +30,45 @@ export interface AuditRow {
   tenant_id: string | null;
   actor_kind: string;
   actor_id: string | null;
-  actor_label: string | null;
+  actor_display: string | null;
   operation: string;
-  resource_type: string;
+  resource_kind: string;
   resource_id: string | null;
   request_id: string | null;
   ip_inet: string | null;
   user_agent: string | null;
-  data_class: string;
-  payload_hash: string;
-  previous_hash: string | null;
-  hash: string;
+  data_class: string | null;
+  detail: unknown;
+  previous_hash: Buffer | null;
+  event_hash: Buffer;
 }
 
-export function computeHash(row: AuditRow): string {
+/**
+ * Re-derive an audit row's hash hex digest using the SAME canonical recipe as the
+ * migration-0011 trigger. `occurredAtText` MUST be Postgres's `occurred_at::text`
+ * rendering (not JS toISOString) for the digest to match the stored event_hash;
+ * pass the value selected as `occurred_at::text` from Postgres. `prevHashHex` is
+ * the hex encoding of the previous row's event_hash, or '' for the chain head.
+ */
+export function computeHash(
+  row: Pick<
+    AuditRow,
+    'id' | 'tenant_id' | 'actor_kind' | 'actor_id' | 'operation' | 'resource_kind' | 'resource_id' | 'data_class'
+  >,
+  occurredAtText: string,
+  prevHashHex: string,
+): string {
   const canonical = [
     row.id,
-    row.occurred_at.toISOString(),
     row.tenant_id ?? '',
     row.actor_kind,
     row.actor_id ?? '',
     row.operation,
-    row.resource_type,
+    row.resource_kind,
     row.resource_id ?? '',
-    row.data_class,
-    row.payload_hash,
-    row.previous_hash ?? '',
+    row.data_class ?? '',
+    occurredAtText,
+    prevHashHex,
   ].join('|');
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -65,34 +91,62 @@ export async function verifyChain(
   from: string,
   to: string,
 ): Promise<VerifyResult> {
-  const { rows } = await client.query<AuditRow>(
-    `SELECT * FROM audit_events
-     WHERE tenant_id = $1::uuid AND occurred_at >= $2 AND occurred_at <= $3
+  // Re-derive each row's hash IN SQL with the exact migration-0011 recipe and
+  // compare to the stored event_hash. Also check that previous_hash links the
+  // immediately-preceding row in the per-tenant order. Doing this in SQL avoids
+  // having to reproduce Postgres's `occurred_at::text` rendering in JS.
+  //
+  // `recomputed` mirrors audit_compute_hash: digest(concat_ws('|', ...,
+  //   occurred_at::text, encode(previous_hash,'hex')), 'sha256'). `expected_prev`
+  // is the prior row's event_hash via LAG over the per-tenant ordering.
+  const { rows } = await client.query<{
+    id: string;
+    hash_ok: boolean;
+    link_ok: boolean;
+  }>(
+    `WITH ordered AS (
+       SELECT
+         id, tenant_id, occurred_at, previous_hash, event_hash,
+         LAG(event_hash) OVER (PARTITION BY tenant_id ORDER BY occurred_at ASC, id ASC) AS expected_prev,
+         digest(
+           concat_ws('|',
+             id::text, tenant_id::text, actor_kind::text,
+             COALESCE(actor_id::text, ''), operation::text, resource_kind,
+             COALESCE(resource_id::text, ''), COALESCE(data_class::text, ''),
+             occurred_at::text,
+             encode(
+               COALESCE(
+                 LAG(event_hash) OVER (PARTITION BY tenant_id ORDER BY occurred_at ASC, id ASC),
+                 ''::bytea
+               ),
+               'hex'
+             )
+           ),
+           'sha256'
+         ) AS recomputed
+       FROM audit_events
+       WHERE tenant_id = $1::uuid
+     )
+     SELECT
+       id,
+       (event_hash = recomputed) AS hash_ok,
+       (previous_hash IS NOT DISTINCT FROM expected_prev) AS link_ok
+     FROM ordered
+     WHERE occurred_at >= $2 AND occurred_at <= $3
      ORDER BY occurred_at ASC, id ASC`,
     [tenantId, from, to],
   );
 
-  // We also need the row just before `from` so we can verify the first row's previous_hash.
-  let priorHash: string | null = null;
-  const { rows: priorRows } = await client.query<{ hash: string }>(
-    `SELECT hash FROM audit_events
-     WHERE tenant_id = $1::uuid AND occurred_at < $2
-     ORDER BY occurred_at DESC, id DESC LIMIT 1`,
-    [tenantId, from],
-  );
-  if (priorRows.length > 0) priorHash = priorRows[0]!.hash;
-
   for (const row of rows) {
-    const expectedHash = computeHash(row);
-    if (row.hash !== expectedHash) {
+    if (!row.hash_ok) {
       return {
         ok: false,
         rowsChecked: rows.length,
         brokenAtRowId: row.id,
-        reason: 'hash mismatch — row content has been tampered with or hash recomputation failed',
+        reason: 'hash mismatch — row content has been tampered with',
       };
     }
-    if (row.previous_hash !== priorHash) {
+    if (!row.link_ok) {
       return {
         ok: false,
         rowsChecked: rows.length,
@@ -100,7 +154,6 @@ export async function verifyChain(
         reason: 'previous_hash does not link to prior row — chain broken',
       };
     }
-    priorHash = row.hash;
   }
 
   return { ok: true, rowsChecked: rows.length, brokenAtRowId: null, reason: null };
@@ -135,7 +188,7 @@ export async function queryEvents(
     i += 1;
   }
   if (q.resourceType) {
-    where.push(`resource_type = $${i}`);
+    where.push(`resource_kind = $${i}`);
     params.push(q.resourceType);
     i += 1;
   }

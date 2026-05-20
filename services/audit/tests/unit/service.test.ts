@@ -2,144 +2,117 @@ import type { PoolClient } from 'pg';
 import { describe, it, expect, vi } from 'vitest';
 
 import { computeHash, verifyChain } from '../../src/service.js';
-import type { AuditRow } from '../../src/service.js';
 
-function makeRow(over: Partial<AuditRow>): AuditRow {
-  return {
-    id: 'r1',
-    occurred_at: new Date('2026-05-18T10:00:00.000Z'),
-    tenant_id: 't1',
-    actor_kind: 'user',
-    actor_id: 'u1',
-    actor_label: null,
-    operation: 'update',
-    resource_type: 'guest',
-    resource_id: 'g1',
-    request_id: null,
-    ip_inet: null,
-    user_agent: null,
-    data_class: 'A',
-    payload_hash: 'p1',
-    previous_hash: null,
-    hash: 'placeholder',
-    ...over,
-  };
-}
+/**
+ * G-37 — these tests were rewritten when the audit service was aligned to the
+ * real audit_events schema (event_hash/resource_kind, not hash/resource_type)
+ * and verifyChain moved its hash re-derivation INTO SQL (to byte-match the
+ * Postgres trigger's concat_ws + occurred_at::text recipe). computeHash is now
+ * a pure helper taking the Postgres-rendered occurred_at text + prev-hash hex;
+ * verifyChain issues a single query returning per-row {id, hash_ok, link_ok}.
+ */
 
-function fakeClient(handlers: Array<(sql: string, params: unknown[]) => { rows: unknown[] }>) {
-  let idx = 0;
+function fakeClient(rows: Array<{ id: string; hash_ok: boolean; link_ok: boolean }>): PoolClient {
   return {
-    query: vi.fn(async (sql: string, params: unknown[] = []) => {
-      const h = handlers[idx];
-      if (!h) throw new Error(`unexpected query #${idx + 1}: ${sql.slice(0, 60)}`);
-      idx += 1;
-      return h(sql, params);
-    }),
+    query: vi.fn(async () => ({ rows })),
     release: vi.fn(),
   } as unknown as PoolClient;
 }
 
-describe('computeHash', () => {
-  it('is stable for the same content', () => {
-    const r = makeRow({});
-    expect(computeHash(r)).toBe(computeHash(r));
+describe('computeHash (aligned to migration-0011 canonical recipe)', () => {
+  const base = {
+    id: '00000000-0000-4000-8000-000000000001',
+    tenant_id: '00000000-0000-4000-8000-0000000000a1',
+    actor_kind: 'user',
+    actor_id: '00000000-0000-4000-8000-0000000000b1',
+    operation: 'create',
+    resource_kind: 'guest',
+    resource_id: '00000000-0000-4000-8000-0000000000c1',
+    data_class: 'A',
+  };
+  const occurredAt = '2026-05-18 10:00:00+00';
+
+  it('produces a 64-char hex sha256 digest', () => {
+    const h = computeHash(base, occurredAt, '');
+    expect(h).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('changes when payload_hash changes', () => {
-    const r1 = makeRow({ payload_hash: 'a' });
-    const r2 = makeRow({ payload_hash: 'b' });
-    expect(computeHash(r1)).not.toBe(computeHash(r2));
+  it('is stable for identical inputs', () => {
+    expect(computeHash(base, occurredAt, '')).toBe(computeHash(base, occurredAt, ''));
   });
 
-  it('changes when previous_hash changes', () => {
-    const r1 = makeRow({ previous_hash: null });
-    const r2 = makeRow({ previous_hash: 'prev' });
-    expect(computeHash(r1)).not.toBe(computeHash(r2));
+  it('changes when the previous-hash hex changes (chain linkage)', () => {
+    const a = computeHash(base, occurredAt, '');
+    const b = computeHash(base, occurredAt, 'deadbeef');
+    expect(a).not.toBe(b);
+  });
+
+  it('changes when resource_kind changes', () => {
+    const a = computeHash(base, occurredAt, '');
+    const b = computeHash({ ...base, resource_kind: 'preference' }, occurredAt, '');
+    expect(a).not.toBe(b);
+  });
+
+  it('changes when occurred_at text changes', () => {
+    const a = computeHash(base, occurredAt, '');
+    const b = computeHash(base, '2026-05-18 10:00:01+00', '');
+    expect(a).not.toBe(b);
+  });
+
+  it('treats null actor_id / data_class as empty string', () => {
+    const withNulls = computeHash(
+      { ...base, actor_id: null, data_class: null },
+      occurredAt,
+      '',
+    );
+    // Equivalent to passing empty strings explicitly.
+    const withEmpties = computeHash(
+      { ...base, actor_id: '' as unknown as string, data_class: '' },
+      occurredAt,
+      '',
+    );
+    expect(withNulls).toBe(withEmpties);
   });
 });
 
-describe('verifyChain', () => {
-  it('returns ok for a valid 2-row chain with no prior', async () => {
-    const r1 = makeRow({ id: 'r1', previous_hash: null });
-    r1.hash = computeHash(r1);
-    const r2 = makeRow({
-      id: 'r2',
-      occurred_at: new Date('2026-05-18T10:01:00.000Z'),
-      previous_hash: r1.hash,
-    });
-    r2.hash = computeHash(r2);
-
+describe('verifyChain (SQL-derived hash_ok / link_ok)', () => {
+  it('returns ok when every row reports hash_ok and link_ok', async () => {
     const client = fakeClient([
-      () => ({ rows: [r1, r2] }),
-      // prior-row probe
-      () => ({ rows: [] }),
+      { id: 'r1', hash_ok: true, link_ok: true },
+      { id: 'r2', hash_ok: true, link_ok: true },
     ]);
-
-    const result = await verifyChain(
-      client,
-      't1',
-      '2026-05-18T00:00:00.000Z',
-      '2026-05-19T00:00:00.000Z',
-    );
-    expect(result.ok).toBe(true);
-    expect(result.rowsChecked).toBe(2);
+    const res = await verifyChain(client, 't1', '2026-05-18T00:00:00Z', '2026-05-19T00:00:00Z');
+    expect(res.ok).toBe(true);
+    expect(res.rowsChecked).toBe(2);
+    expect(res.brokenAtRowId).toBeNull();
   });
 
-  it('detects tampering when payload_hash is changed but hash is not recomputed', async () => {
-    const r1 = makeRow({ id: 'r1', previous_hash: null, payload_hash: 'p-original' });
-    r1.hash = computeHash(r1);
-    // Tamper: change payload_hash but leave hash field
-    r1.payload_hash = 'p-tampered';
-
+  it('flags a hash mismatch at the offending row', async () => {
     const client = fakeClient([
-      () => ({ rows: [r1] }),
-      () => ({ rows: [] }),
+      { id: 'r1', hash_ok: true, link_ok: true },
+      { id: 'r2', hash_ok: false, link_ok: true },
     ]);
-
-    const result = await verifyChain(
-      client,
-      't1',
-      '2026-05-18T00:00:00.000Z',
-      '2026-05-19T00:00:00.000Z',
-    );
-    expect(result.ok).toBe(false);
-    expect(result.brokenAtRowId).toBe('r1');
-    expect(result.reason).toMatch(/hash mismatch/);
+    const res = await verifyChain(client, 't1', '2026-05-18T00:00:00Z', '2026-05-19T00:00:00Z');
+    expect(res.ok).toBe(false);
+    expect(res.brokenAtRowId).toBe('r2');
+    expect(res.reason).toMatch(/hash mismatch/);
   });
 
-  it('detects broken previous_hash linkage', async () => {
-    const r1 = makeRow({ id: 'r1', previous_hash: null });
-    r1.hash = computeHash(r1);
-    const r2 = makeRow({
-      id: 'r2',
-      occurred_at: new Date('2026-05-18T10:01:00.000Z'),
-      previous_hash: 'wrong-prev', // broken link
-    });
-    r2.hash = computeHash(r2);
-
+  it('flags broken previous_hash linkage at the offending row', async () => {
     const client = fakeClient([
-      () => ({ rows: [r1, r2] }),
-      () => ({ rows: [] }),
+      { id: 'r1', hash_ok: true, link_ok: true },
+      { id: 'r2', hash_ok: true, link_ok: false },
     ]);
-
-    const result = await verifyChain(
-      client,
-      't1',
-      '2026-05-18T00:00:00.000Z',
-      '2026-05-19T00:00:00.000Z',
-    );
-    expect(result.ok).toBe(false);
-    expect(result.brokenAtRowId).toBe('r2');
-    expect(result.reason).toMatch(/previous_hash/);
+    const res = await verifyChain(client, 't1', '2026-05-18T00:00:00Z', '2026-05-19T00:00:00Z');
+    expect(res.ok).toBe(false);
+    expect(res.brokenAtRowId).toBe('r2');
+    expect(res.reason).toMatch(/previous_hash/);
   });
 
-  it('handles empty range', async () => {
-    const client = fakeClient([
-      () => ({ rows: [] }),
-      () => ({ rows: [] }),
-    ]);
-    const result = await verifyChain(client, 't1', '2026-05-18T00:00:00.000Z', '2026-05-19T00:00:00.000Z');
-    expect(result.ok).toBe(true);
-    expect(result.rowsChecked).toBe(0);
+  it('returns ok with zero rows for an empty range', async () => {
+    const client = fakeClient([]);
+    const res = await verifyChain(client, 't1', '2026-05-18T00:00:00Z', '2026-05-19T00:00:00Z');
+    expect(res.ok).toBe(true);
+    expect(res.rowsChecked).toBe(0);
   });
 });
