@@ -63,7 +63,18 @@ describe('audit-svc server', () => {
     expect((res.json() as { category?: string }).category).toBe('validation');
   });
 
-  it('POST /v1/audit/export with JSON body parses (not 415)', async () => {
+  it('GET /v1/audit/verify with valid from/to returns 200 + a verification result', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/audit/verify?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    // verifyChain over an empty range returns a well-formed result object.
+    expect(typeof res.json()).toBe('object');
+  });
+
+  it('POST /v1/audit/export with JSON body parses (not 415) and returns 200', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/audit/export',
@@ -74,8 +85,21 @@ describe('audit-svc server', () => {
         reason: 'compliance review',
       }),
     });
-    expect(res.statusCode).not.toBe(415);
-    expect([200, 400]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { export?: unknown[]; verification?: unknown; reason?: string };
+    expect(Array.isArray(body.export)).toBe(true);
+    expect(body.verification).toBeDefined();
+    expect(body.reason).toBe('compliance review');
+  });
+
+  it('POST /v1/audit/export with a missing required field returns 400 validation', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/export',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ from: '2026-01-01T00:00:00Z' }),
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('GET /v1/audit/events with a role lacking audit.read returns 403', async () => {

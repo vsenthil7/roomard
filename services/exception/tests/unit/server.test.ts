@@ -19,7 +19,24 @@ describe('exception-svc server', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-only-do-not-use-in-production-32bytes!';
     const pool = createFakePool([
-      // list query — return one item so the items array is non-empty
+      // PATCH update returns the updated row (UPDATE ... RETURNING *). Must precede
+      // the generic select rule; the UPDATE statement contains "exception_queue_items"
+      // but not "from exception_queue_items".
+      {
+        match: 'update exception_queue_items',
+        rows: [
+          {
+            id: '00000000-0000-4000-8000-0000000000ee',
+            tenant_id: '00000000-0000-4000-8000-000000000001',
+            kind: 'review_link_ambiguous',
+            status: 'resolved',
+            severity: 3,
+            title: 'Ambiguous review link',
+            resolved_at: new Date(),
+          },
+        ],
+      },
+      // list / get query — return one item so the items array is non-empty
       {
         match: 'from exception_queue_items',
         rows: [
@@ -103,6 +120,62 @@ describe('exception-svc server', () => {
     // (matched update) or 404 (no row) depending on fake pool match.
     expect(res.statusCode).not.toBe(415);
     expect(res.statusCode).not.toBe(403);
+  });
+
+  it('PATCH /v1/exceptions/:id returns 200 + the updated row on success', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/exceptions/00000000-0000-4000-8000-0000000000ee',
+      headers: { authorization: `Bearer ${mgrToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ status: 'resolved', resolutionNotes: 'handled' }),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { status?: string };
+    expect(body.status).toBe('resolved');
+  });
+
+  it('PATCH /v1/exceptions/:id with no updatable fields returns 400 validation', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/exceptions/00000000-0000-4000-8000-0000000000ee',
+      headers: { authorization: `Bearer ${mgrToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({}),
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { category?: string }).category).toBe('validation');
+  });
+
+  it('GET /v1/exceptions?limit=1 with 2 rows sets hasMore + a nextCursor', async () => {
+    // limit=1 and 2 rows returned → hasMore true, exercises encodeCursor.
+    const now = new Date();
+    const pagedPool = createFakePool([
+      {
+        match: 'from exception_queue_items',
+        rows: [
+          { id: '00000000-0000-4000-8000-0000000000a1', tenant_id: '00000000-0000-4000-8000-000000000001', kind: 'review_link_ambiguous', status: 'open', severity: 3, title: 'one', created_at: now },
+          { id: '00000000-0000-4000-8000-0000000000a2', tenant_id: '00000000-0000-4000-8000-000000000001', kind: 'review_link_ambiguous', status: 'open', severity: 2, title: 'two', created_at: now },
+        ],
+      },
+    ]);
+    const pagedApp = buildServer({ pool: pagedPool as unknown as RoomardPool });
+    await pagedApp.ready();
+    const res = await pagedApp.inject({
+      method: 'GET',
+      url: '/v1/exceptions?limit=1',
+      headers: { authorization: `Bearer ${mgrToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { page?: { has_more?: boolean; next_cursor?: string | null } };
+    expect(body.page?.has_more).toBe(true);
+    expect(typeof body.page?.next_cursor).toBe('string');
+    // Round-trip the cursor: a follow-up request with it must decode without error.
+    const next = await pagedApp.inject({
+      method: 'GET',
+      url: `/v1/exceptions?limit=1&cursor=${encodeURIComponent(body.page!.next_cursor!)}`,
+      headers: { authorization: `Bearer ${mgrToken}` },
+    });
+    expect(next.statusCode).toBe(200);
+    await pagedApp.close();
   });
 
   it('GET /v1/exceptions with a role lacking exception.read returns 403', async () => {

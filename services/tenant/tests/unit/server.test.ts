@@ -37,11 +37,43 @@ describe('tenant-svc server', () => {
           },
         ],
       },
+      // Insert path returns the created row (RETURNING ...). Must precede the
+      // generic `from properties` rules so the INSERT statement matches here.
+      {
+        match: 'insert into properties',
+        rows: [
+          {
+            id: 'p-new',
+            tenant_id: TEST_TENANT_ID,
+            name: 'New Hotel',
+            short_code: 'NEW',
+            timezone: 'Europe/London',
+            locale: 'en-GB',
+            address_json: null,
+            status: 'active',
+          },
+        ],
+      },
+      // Dup-check SELECT (WHERE short_code = $1) must return empty so the insert
+      // proceeds. Matches before the list/by-id rules via the where clause.
+      { match: 'from properties where short_code', rows: [] },
+      // GET /v1/properties/:id success
+      {
+        match: 'from properties where id',
+        rows: [
+          { id: 'p1', tenant_id: TEST_TENANT_ID, name: 'Demo Hotel', short_code: 'RDH', status: 'active' },
+        ],
+      },
       {
         match: 'from properties order by name',
         rows: [{ id: 'p1', tenant_id: TEST_TENANT_ID, name: 'Demo Hotel', short_code: 'RDH' }],
       },
-      { match: 'from roles where tenant_id is null', rows: [{ id: 'r1', name: 'admin' }] },
+      {
+        match: 'from roles where tenant_id is null',
+        rows: [
+          { id: 'r1', tenant_id: null, name: 'admin', description: 'Admin', permissions: { all: ['*'] }, data_classes: [], is_system: true },
+        ],
+      },
     ]);
     app = buildServer({ pool: pool as unknown as RoomardPool });
     await app.ready();
@@ -83,17 +115,71 @@ describe('tenant-svc server', () => {
     expect(Array.isArray(body.items)).toBe(true);
   });
 
-  it('POST /v1/properties with a JSON body is parsed (not 415) and validates', async () => {
+  it('POST /v1/properties creates and returns the property (201 + row)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/properties',
       headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
       payload: JSON.stringify({ name: 'New Hotel', shortCode: 'NEW', timezone: 'Europe/London' }),
     });
-    // 201 created (fake pool returns no dup, then the insert rule is unmatched so
-    // rows: [] — the handler still replies 201 with the row). What we're proving:
-    // the JSON body parsed (no 415) and RBAC passed (no 403).
-    expect([200, 201]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as { short_code?: string };
+    expect(body.short_code).toBe('NEW');
+  });
+
+  it('POST /v1/properties with a duplicate short_code returns 400 validation', async () => {
+    // Dedicated pool whose dup-check returns an existing row.
+    const dupPool = createFakePool([
+      { match: 'from properties where short_code', rows: [{ id: 'existing' }] },
+    ]);
+    const dupApp = buildServer({ pool: dupPool as unknown as RoomardPool });
+    await dupApp.ready();
+    const res = await dupApp.inject({
+      method: 'POST',
+      url: '/v1/properties',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ name: 'Dup', shortCode: 'RDH', timezone: 'Europe/London' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { category?: string }).category).toBe('validation');
+    await dupApp.close();
+  });
+
+  it('GET /v1/properties/:id returns 200 and the property', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/properties/00000000-0000-4000-8000-0000000000aa',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { short_code?: string };
+    expect(body.short_code).toBe('RDH');
+  });
+
+  it('GET /v1/properties/:id with empty pool returns 404 not_found', async () => {
+    const emptyPool = createFakePool([]);
+    const emptyApp = buildServer({ pool: emptyPool as unknown as RoomardPool });
+    await emptyApp.ready();
+    const res = await emptyApp.inject({
+      method: 'GET',
+      url: '/v1/properties/00000000-0000-4000-8000-0000000000aa',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect((res.json() as { category?: string }).category).toBe('not_found');
+    await emptyApp.close();
+  });
+
+  it('GET /v1/roles returns 200 and an items array', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/roles',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items?: unknown[] };
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items?.length).toBeGreaterThan(0);
   });
 
   it('POST /v1/properties with insufficient permission returns 403', async () => {
