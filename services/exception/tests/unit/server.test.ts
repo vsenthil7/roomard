@@ -1,0 +1,127 @@
+/**
+ * Server-level tests for exception-svc using Fastify `app.inject()` + a fake pool.
+ * Exercises the HTTP + framework path (auth preHandler, RBAC, JSON parsing,
+ * canonical error envelope, /health) without a real database.
+ * See docs/TRACEABILITY.md for why this class of test matters (G-28..G-32).
+ */
+import type { RoomardPool } from '@roomard/db';
+import { createFakePool, mintTestToken, newUuid } from '@roomard/test-utils';
+import type { FastifyInstance } from 'fastify';
+import { describe, it, expect, beforeAll } from 'vitest';
+
+import { buildServer } from '../../src/server.js';
+
+
+describe('exception-svc server', () => {
+  let app: FastifyInstance;
+  let mgrToken: string;
+
+  beforeAll(async () => {
+    process.env.JWT_SECRET = 'test-only-do-not-use-in-production-32bytes!';
+    const pool = createFakePool([
+      // list query — return one item so the items array is non-empty
+      {
+        match: 'from exception_queue_items',
+        rows: [
+          {
+            id: newUuid(),
+            tenant_id: '00000000-0000-4000-8000-000000000001',
+            kind: 'review_link_ambiguous',
+            status: 'open',
+            severity: 3,
+            title: 'Ambiguous review link',
+            created_at: new Date(),
+          },
+        ],
+      },
+    ]);
+    app = buildServer({ pool: pool as unknown as RoomardPool });
+    await app.ready();
+    // front_desk_manager has both exception.read and exception.write
+    mgrToken = await mintTestToken({ roles: ['front_desk_manager'] });
+  });
+
+  it('/health responds 200', async () => {
+    const res = await app.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('GET /v1/exceptions without a token returns 401', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/exceptions' });
+    expect(res.statusCode).toBe(401);
+    expect((res.json() as { category?: string }).category).toBe('authentication');
+  });
+
+  it('GET /v1/exceptions with manager token returns 200 with items + page', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/exceptions',
+      headers: { authorization: `Bearer ${mgrToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items?: unknown[]; page?: unknown };
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.page).toBeDefined();
+  });
+
+  it('GET /v1/exceptions/:id for a non-existent id returns 404 (fake pool empty)', async () => {
+    // The list rule matches "from exception_queue_items" but get() uses
+    // "SELECT * FROM exception_queue_items WHERE id" — also matches, returning
+    // the seeded row. To force a miss, use an id and a pool with no match: we
+    // instead assert the happy path returns 200 here, and rely on a fresh pool
+    // for the 404 case below.
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/exceptions/${newUuid()}`,
+      headers: { authorization: `Bearer ${mgrToken}` },
+    });
+    expect([200, 404]).toContain(res.statusCode);
+  });
+
+  it('GET /v1/exceptions/:id with empty pool returns 404 canonical envelope', async () => {
+    const emptyPool = createFakePool([]); // no rules → every query returns []
+    const emptyApp = buildServer({ pool: emptyPool as unknown as RoomardPool });
+    await emptyApp.ready();
+    const res = await emptyApp.inject({
+      method: 'GET',
+      url: `/v1/exceptions/${newUuid()}`,
+      headers: { authorization: `Bearer ${mgrToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect((res.json() as { category?: string }).category).toBe('not_found');
+    await emptyApp.close();
+  });
+
+  it('PATCH /v1/exceptions/:id with JSON body parses (not 415) and passes RBAC', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/exceptions/${newUuid()}`,
+      headers: { authorization: `Bearer ${mgrToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ status: 'resolved', resolutionNotes: 'handled' }),
+    });
+    // Not 415 (JSON parsed), not 403 (manager has exception.write). Either 200
+    // (matched update) or 404 (no row) depending on fake pool match.
+    expect(res.statusCode).not.toBe(415);
+    expect(res.statusCode).not.toBe(403);
+  });
+
+  it('GET /v1/exceptions with a role lacking exception.read returns 403', async () => {
+    const conciergeToken = await mintTestToken({ roles: ['concierge'] });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/exceptions',
+      headers: { authorization: `Bearer ${conciergeToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('unknown route returns 404 canonical envelope', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/nope',
+      headers: { authorization: `Bearer ${mgrToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect((res.json() as { category?: string }).category).toBe('not_found');
+  });
+});

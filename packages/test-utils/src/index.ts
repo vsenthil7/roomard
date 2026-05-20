@@ -238,3 +238,75 @@ export function deterministicHash(value: unknown): string {
 export function newUuid(): string {
   return randomUUID();
 }
+
+/**
+ * A minimal fake RoomardPool for server-level (`app.inject`) tests that exercise
+ * the HTTP + framework layers without a real database.
+ *
+ * `withTenantContext`/`withPrincipalContext` call `pool.connect()` then run
+ * `BEGIN`, several `SET LOCAL app.*` statements, the handler's queries, and
+ * `COMMIT` on the returned client. This fake returns `{ rows: [] }` for the
+ * transaction-control + SET statements and delegates real data queries to a
+ * caller-supplied responder keyed by a substring match on the SQL.
+ *
+ * Pass an array of `{ match, rows }` rules; the first rule whose `match`
+ * substring (case-insensitive) appears in the SQL wins. Anything unmatched
+ * returns `{ rows: [] }`. This is deliberately simple — server tests assert on
+ * status codes, envelopes, and routing, not on SQL correctness (that's the job
+ * of integration tests against a real DB).
+ */
+export interface FakePoolRule {
+  match: string;
+  rows: unknown[];
+  rowCount?: number;
+}
+
+export interface FakePool {
+  query(sql: string, params?: unknown[]): Promise<{ rows: unknown[]; rowCount: number }>;
+  connect(): Promise<{
+    query(sql: string, params?: unknown[]): Promise<{ rows: unknown[]; rowCount: number }>;
+    release(): void;
+  }>;
+  close(): Promise<void>;
+  /** Every SQL string the pool (or its clients) was asked to run. */
+  readonly queries: readonly string[];
+}
+
+export function createFakePool(rules: FakePoolRule[] = []): FakePool {
+  const queries: string[] = [];
+
+  const respond = (sql: string): { rows: unknown[]; rowCount: number } => {
+    queries.push(sql);
+    const lower = sql.toLowerCase();
+    for (const rule of rules) {
+      if (lower.includes(rule.match.toLowerCase())) {
+        return { rows: rule.rows, rowCount: rule.rowCount ?? rule.rows.length };
+      }
+    }
+    return { rows: [], rowCount: 0 };
+  };
+
+  const client = {
+    async query(sql: string) {
+      return respond(sql);
+    },
+    release() {
+      /* no-op */
+    },
+  };
+
+  return {
+    async query(sql: string) {
+      return respond(sql);
+    },
+    async connect() {
+      return client;
+    },
+    async close() {
+      /* no-op */
+    },
+    get queries() {
+      return queries;
+    },
+  };
+}
