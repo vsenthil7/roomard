@@ -2,22 +2,27 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 08:34 BST (CP-55)
+**Last updated:** 2026-05-20 09:18 BST (CP-60)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 275 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 311 passing, 0 failing, 7 skipped (DB integration)
 
 ---
 
-## Session timeline (CP-1 → CP-55)
+## Session timeline (CP-1 → CP-60)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 55 total since session start)
+### Commits landed (newest → oldest, 60 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-55 | [DOCS] | Traceability live through CP-54 + **first measured coverage baseline** (replaces the long-standing ~35-45% estimate). Records CP-54 (guest/brief/ingest server supertests), workspace 250→275 tests, and a per-module measured coverage table (see below). Every stateful service now exercises `buildServer` through HTTP. | ✅ |
+| (this) | CP-60 | [DOCS] | Traceability live through CP-59 — the coverage-lift run. Records CP-56 (auth 40→75%), CP-57 (logger 39→100% + **G-33** fix), CP-58 (tenant/exception/audit deeper paths), CP-59 (capture 75→98%). Workspace 275→311 tests. Updated the measured coverage table with post-lift numbers. | ✅ |
+| `85ae4c7` | CP-59 | [FEAT] | capture object-store tests — mocked `@aws-sdk/client-s3` (`vi.hoisted`) to cover the real `ObjectStore.put`/`get` success + IntegrationError branches, `objectStoreConfigFromEnv`, and the InMemory stub. capture 4→12 tests; **75→97.8%** (object-store.ts 29→100, pipeline.ts 96.8). | ✅ |
+| `78728ef` | CP-58 | [FEAT] | Deeper handler-path coverage for tenant/exception/audit servers — the CP-52 tests proved routing/RBAC but returned empty rows, leaving success bodies uncovered. Added data-returning paths: tenant POST-property-201 / dup-400 / GET-:id / GET-roles (**58.5→81.1%**); exception PATCH-success / no-fields-400 / cursor round-trip exercising encode+decode (**68.6→77.7%**); audit verify-success / export-success / export-400 (**73.4→75.7%**). +9 tests. | ✅ |
+| `bb5ef95` | CP-57 | [FIX] | **G-33** logger Sentry forwarder was dead code — the pino `logMethod` hook gated on `method.name` (always `"LOG"`); pino passes the numeric level as the THIRD arg, so the `=== 'error'` check never matched and Sentry forwarding NEVER fired in any environment. Fixed to gate on `level >= 50`. +9 forwarder tests (undici mocked). logger 11→20 tests; **38.7→100%**. Found purely by chasing real coverage. | ✅ |
+| `d38a866` | CP-56 | [FEAT] | auth-svc server supertests + un-excluded `server.ts` from coverage config. Real AuthService over `createFakePool` drives login/me/refresh/logout/SSO-stubs/mfa through `app.inject`, exercising the service.ts methods `service.test.ts` never reached. auth 16→30 tests; **40.1→74.6%**. (Documented the snake_case wire contract: `access_token`, `tenant_slug`, `mfa_token`.) | ✅ |
+| `c8f2e13` | CP-55 | [DOCS] | Traceability live through CP-54 + **first measured coverage baseline** (replaces the long-standing ~35-45% estimate). Records CP-54 (guest/brief/ingest server supertests), workspace 250→275 tests, and a per-module measured coverage table. Every stateful service now exercises `buildServer` through HTTP. | ✅ |
 | `a0af70b` | CP-54 | [FEAT] | Server-level supertests for guest/brief/ingest — extends the CP-52 `createFakePool` + `app.inject` pattern to the last three stateful services lacking HTTP-layer tests. guest 12→20, brief 17→26, ingest 21→29 (+25). ingest includes a G-27 regression guard (/health registered once) + the public HMAC-gated `/webhooks/mews` path. Lint 0/0. | ✅ |
 | `a0871e1` | CP-53 | [DOCS] | Traceability live through CP-52 — records the server-level supertest coverage push and the `createFakePool` test-utils helper. Workspace 228→250 tests. No new G-issues. | ✅ |
 | `0ea1ce3` | CP-52 | [FEAT] | Server-level supertests for tenant/audit/exception — closes the exact test gap that hid the G-28→G-32 cascade (these services had only logic tests, never exercised `buildServer` through HTTP). New reusable `createFakePool` in test-utils (satisfies the `connect`→`BEGIN`→`SET LOCAL`→query→`COMMIT` sequence; substring-matched row rules). New `server.test.ts` per service via `app.inject` + `mintTestToken`: /health, 401-no-token, 200-happy, JSON-not-415, 403-insufficient-perm, 404-envelope. tenant 3→10, audit 7→14, exception 4→12 (+22). Lint 0/0. | ✅ |
@@ -75,7 +80,7 @@ This repo has been built across multiple sessions / parallel branches. CP number
 
 ---
 
-## Bugs discovered & status (G-1 through G-32)
+## Bugs discovered & status (G-1 through G-33)
 
 | ID | Description | Status | Fix CP |
 |---|---|---|---|
@@ -95,8 +100,9 @@ This repo has been built across multiple sessions / parallel branches. CP number
 | G-30 | auth-svc registered routes at `/auth/...` while the gateway forwards `/v1/auth/...` (every other service uses `/v1/`). Login was a chicken-and-egg lockout — framework preHandler demanded a Bearer token on the login endpoint. | ✅ FIXED | CP-48 |
 | G-31 | DB schema never migrated to the running Postgres container — `relation "users" does not exist` on first real login. Provisioning gap, not a code bug. Applied 16 migrations + seed via `DATABASE_URL=...@localhost:5532/roomard pnpm --filter @roomard/db migrate` then `seed`. | ✅ FIXED | CP-50 |
 | G-32 | auth-svc `buildSession` queried `roles.permissions` with `jsonb_array_elements_text` (array-only) but the schema/seed store permissions as an OBJECT of `{ resource: [actions] }` (or `{ all: ['*'] }`). Every login threw Postgres 22023 `cannot extract elements from an object` *after* the user lookup succeeded. Fixed by fetching raw jsonb and flattening in TypeScript (`flattenRolePermissions`). | ✅ FIXED | CP-50 |
+| G-33 | logger Sentry forwarder was **dead code** — the pino `logMethod` hook gated forwarding on `method.name === 'error'/'fatal'`, but pino always passes `method.name === "LOG"` and supplies the numeric level as the hook's THIRD argument. So the condition never matched and the entire Sentry error-forwarding integration (built in CP-42) had never fired in any environment. Found while writing tests to lift logger off 38.7%. Fixed to gate on `level >= 50` (error=50, fatal=60). | ✅ FIXED | CP-57 |
 
-**Score: 33 fixed, 1 invalid (G-5), 0 functional bugs open.**
+**Score: 34 fixed, 1 invalid (G-5), 0 functional bugs open.**
 
 The login path is now demonstrably working end to end on the live 15-container stack — a user can authenticate through the browser-facing nginx route and receive a working JWT that the gateway accepts on protected endpoints.
 
@@ -127,38 +133,38 @@ From BRD §6.2 — original wedge of 8 use cases:
 
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
-| 7 packages | ✅ green | ✅ 78 tests (errors 22, logger **11**, schemas 32, framework 13, others) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 189 tests (ai-gateway **37**, ingest **29**, brief **26**, **guest 20**, **auth 16**, **audit 14**, **api-gateway 14**, **exception 12**, **tenant 10**, capture 4) | ✅ 0 errors |
+| 7 packages | ✅ green | ✅ 87 tests (errors 22, logger **20**, schemas 32, framework 13) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 216 tests (ai-gateway **37**, **auth 30**, ingest **29**, brief **26**, guest 20, **audit 16**, **exception 15**, **api-gateway 14**, **tenant 14**, **capture 12**) | ✅ 0 errors |
 | apps/web | ✅ green | ✅ 8 tests | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **275 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| **Workspace total** | **19/19 green** | **311 passing, 0 failing, 7 skipped** | **0 lint errors** |
 
-**Delta:** +25 tests since CP-53 (CP-54 server-level supertests: guest +8, brief +9, ingest +8). Every stateful service now exercises `buildServer` end to end through HTTP — the gap that hid the G-28→G-32 cascade is closed across the entire service tier.
+**Delta:** +36 tests across the coverage-lift run (CP-56 auth +14, CP-57 logger +9, CP-58 tenant/exception/audit +9, CP-59 capture +8). One real bug (G-33) found and fixed while doing it.
 
-### Measured coverage baseline (first real measurement, CP-55)
+### Measured coverage — post-lift (CP-60)
 
-This replaces the long-standing ~35-45% *estimate*. Measured via `vitest run --coverage` (v8, % statements, `src/` only) at CP-54 HEAD:
+Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was** column is the CP-55 baseline; **Now** is after the CP-56→CP-59 lift.
 
-| Module | Cov % | Tests | Notes |
-|---|---|---|---|
-| schemas | 98.3 | 32 | strong |
-| brief | 95.9 | 26 | strong |
-| errors | 93.8 | 22 | strong |
-| ingest | 82.4 | 29 | good |
-| guest | 81.6 | 20 | good |
-| capture | 75.0 | 4 | mid (only 4 tests — needs S3-mock lift) |
-| ai-gateway | 75.0 | 37 | mid |
-| audit | 73.4 | 14 | mid |
-| api-gateway | 72.4 | 14 | mid (server.ts 68.6, routes.ts 83.6) |
-| exception | 68.6 | 12 | mid |
-| tenant | 58.5 | 10 | needs lift |
-| auth | 40.1 | 16 | **LOW — no server.test.ts; security core** (addressed CP-56) |
-| logger | 38.7 | 11 | low (Sentry HTTP-forward path untested) |
-| apps/web | 8.6 | 8 | **LOWEST — no route-component tests** |
-| db | 3.2 | 7 skipped | **blocked — integration tests need a test Postgres** |
+| Module | Was | Now | Tests | Notes |
+|---|---|---|---|---|
+| logger | 38.7 | **100** | 11→20 | ↑ CP-57 (+ G-33 fix) |
+| capture | 75.0 | **97.8** | 4→12 | ↑ CP-59 (object-store 29→100) |
+| schemas | 98.3 | 98.3 | 32 | strong |
+| brief | 95.9 | 95.9 | 26 | strong |
+| errors | 93.8 | 93.8 | 22 | strong |
+| ingest | 82.4 | 82.4 | 29 | good |
+| guest | 81.6 | 81.6 | 20 | good |
+| tenant | 58.5 | **81.1** | 10→14 | ↑ CP-58 (only `start()` left) |
+| exception | 68.6 | **77.7** | 12→15 | ↑ CP-58 |
+| audit | 73.4 | **75.7** | 14→16 | ↑ CP-58 (server.ts 78; verifyChain needs DB integration) |
+| auth | 40.1 | **74.6** | 16→30 | ↑ CP-56 (service.ts 79, server.ts 63) |
+| ai-gateway | 75.0 | 75.0 | 37 | mid |
+| api-gateway | 72.4 | 72.4 | 14 | mid (CP-62 target) |
+| apps/web | 8.6 | 8.6 | 8 | **LOWEST — no route-component tests (CP-61 target)** |
+| db | 3.2 | 3.2 | 7 skipped | **blocked — integration tests need a test Postgres (CP-63)** |
 
 *(service-framework has 13 tests but no `test:coverage` script; not measured here.)*
 
-**Biggest gaps, priority order:** apps/web (8.6%), db (3.2%, blocked on test Postgres), auth (40%, no HTTP test), logger (38.7%, Sentry path), tenant (58.5%). The coverage-lift CPs below attack these hardest-first.
+**Remaining gaps, priority order:** apps/web (8.6%, no route tests), db (3.2%, blocked on test Postgres), api-gateway (72%), ai-gateway (75%), then pushing the mid-70s services to ≥90% where unit-testable. Several modules now have a legitimate floor: each service's `start()` (binds a port — needs a live listen) and audit's `verifyChain` hash-chain logic (needs real linked rows — DB integration territory).
 
 ---
 
@@ -194,14 +200,14 @@ All functional bugs are closed and the login loop is verified live. Remaining wo
 |---|---|---|---|
 | CP-52 | exception, audit, tenant server.ts supertests | L | ✅ DONE (+22) |
 | CP-54 | guest, brief, ingest server.ts supertests | M | ✅ DONE (+25) |
-| CP-56 | auth server.ts supertests + un-exclude server.ts from coverage — lift auth off 40% | M | in progress |
-| CP-57 | logger Sentry HTTP-forward path tests — lift off 38.7% | S | pending |
-| CP-58 | tenant + exception + audit deeper handler-path coverage | M | pending |
-| CP-59 | capture object-store — mock S3 client tests (only 4 tests today) | S | pending |
-| CP-60 | apps/web — route-component tests — lift off 8.6% | M | pending |
-| CP-61 | db — point the 7 skipped integration tests at the running test Postgres | M | pending |
+| CP-56 | auth server.ts supertests + un-exclude server.ts from coverage | M | ✅ DONE (40→75%) |
+| CP-57 | logger Sentry HTTP-forward path tests (+ G-33 fix) | S | ✅ DONE (39→100%) |
+| CP-58 | tenant + exception + audit deeper handler-path coverage | M | ✅ DONE |
+| CP-59 | capture object-store — mock S3 client tests | S | ✅ DONE (75→98%) |
+| CP-61 | apps/web — route-component tests — lift off 8.6% (biggest single gap) | M | next |
 | CP-62 | api-gateway — broaden server.test.ts upstream-proxy coverage | M | pending |
-| CP-63 | Re-measure aggregate, push remaining modules to ≥90%, lock baseline in COVERAGE_BASELINE.md | S | pending |
+| CP-63 | db — point the 7 skipped integration tests at the running test Postgres | M | pending |
+| CP-64 | Re-measure aggregate, push remaining modules to ≥90%, lock baseline in COVERAGE_BASELINE.md | S | pending |
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
