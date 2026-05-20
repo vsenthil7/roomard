@@ -123,24 +123,30 @@ async function applyContext(
   ctx: TenantContext,
   useLocal = true,
 ): Promise<void> {
-  const setter = useLocal ? 'SET LOCAL' : 'SET';
-  await client.query(`${setter} app.tenant_id = $1`, [ctx.tenantId]);
-  await client.query(`${setter} app.actor_kind = $1`, [ctx.actorKind ?? (ctx.userId ? 'user' : 'system')]);
-  if (ctx.userId) {
-    await client.query(`${setter} app.user_id = $1`, [ctx.userId]);
-  } else {
-    await client.query(`${setter} app.user_id = ''`);
-  }
+  // G-35: Postgres SET / SET LOCAL does NOT accept bind parameters ($1) — it only
+  // takes literals, so `SET LOCAL app.tenant_id = $1` throws `syntax error at or
+  // near "$1"` against a real server. (This stayed latent because unit tests use a
+  // fake pool that never parses the SET syntax.) Use set_config(name, value, is_local)
+  // — the function form that DOES accept parameters and is injection-safe. is_local
+  // = useLocal mirrors SET LOCAL (transaction-scoped) vs SET (session-scoped).
+  const isLocal = useLocal;
+  await client.query('SELECT set_config($1, $2, $3)', ['app.tenant_id', ctx.tenantId, isLocal]);
+  await client.query('SELECT set_config($1, $2, $3)', [
+    'app.actor_kind',
+    ctx.actorKind ?? (ctx.userId ? 'user' : 'system'),
+    isLocal,
+  ]);
+  await client.query('SELECT set_config($1, $2, $3)', ['app.user_id', ctx.userId ?? '', isLocal]);
   if (ctx.requestId) {
-    await client.query(`${setter} app.request_id = $1`, [ctx.requestId]);
+    await client.query('SELECT set_config($1, $2, $3)', ['app.request_id', ctx.requestId, isLocal]);
   }
   if (ctx.ipInet) {
     // Validated inet — Postgres will fail closed if malformed.
-    await client.query(`${setter} app.ip_inet = $1`, [ctx.ipInet]);
+    await client.query('SELECT set_config($1, $2, $3)', ['app.ip_inet', ctx.ipInet, isLocal]);
   }
   if (ctx.userAgent) {
     const safe = ctx.userAgent.replace(SAFE_AGENT_RE, '').slice(0, 512);
-    await client.query(`${setter} app.user_agent = $1`, [safe]);
+    await client.query('SELECT set_config($1, $2, $3)', ['app.user_agent', safe, isLocal]);
   }
 }
 
