@@ -2,22 +2,25 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-20 09:18 BST (CP-60)
+**Last updated:** 2026-05-20 10:11 BST (CP-64)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-**Total tests:** 311 passing, 0 failing, 7 skipped (DB integration)
+**Total tests:** 328 passing, 0 failing, 7 skipped (DB integration)
 
 ---
 
-## Session timeline (CP-1 → CP-60)
+## Session timeline (CP-1 → CP-64)
 
 This repo has been built across multiple sessions / parallel branches. CP numbering follows my session-log order. The "parallel session" reference in some CP messages indicates work done independently in a sibling Claude session focused on review-comment fixes and wedge-MVP completion — its commits were integrated into main starting at CP-37.
 
-### Commits landed (newest → oldest, 60 total since session start)
+### Commits landed (newest → oldest, 64 total since session start)
 
 | Commit | CP | Type | Summary | Verified |
 |---|---|---|---|---|
-| (this) | CP-60 | [DOCS] | Traceability live through CP-59 — the coverage-lift run. Records CP-56 (auth 40→75%), CP-57 (logger 39→100% + **G-33** fix), CP-58 (tenant/exception/audit deeper paths), CP-59 (capture 75→98%). Workspace 275→311 tests. Updated the measured coverage table with post-lift numbers. | ✅ |
+| (this) | CP-64 | [DOCS] | Traceability live through CP-63 — the apps/web route-test run. Records CP-61 (offline-queue + login route, 8.6→20.6%), CP-62 (exceptions + guests-list routes + reusable render harness, →33.5%), CP-63 (index + guest-detail routes + real-tree harness, →56.7%). Workspace 311→328 tests. apps/web 8.6→56.7%. | ✅ |
+| `74d780d` | CP-63 | [FEAT] | apps/web index + guest-detail route tests + `renderRealTree` harness (real routeTree so `Route.useParams` + real `__root` render). guests.$id.tsx 0→83.6, index.tsx 0→88.5, __root.tsx 8→84, routeTree.ts →100. web 24→28 tests; **33.5→56.7%**. | ✅ |
+| `6733356` | CP-62 | [FEAT] | apps/web exceptions + guests-list route tests + reusable `renderRouteComponent` harness (in-memory router + QueryClientProvider + stub paths for internal `<Link>`). exceptions.tsx 0→100 (useQuery+useMutation+tab-switch), guests.index.tsx 0→100 (debounced search). web 17→24 tests; **20.6→33.5%**. | ✅ |
+| `6065e6c` | CP-61 | [FEAT] | apps/web offline-queue + login route tests — lifts the lowest module off 8.6%. offline-queue.ts 0→89 (fake-indexeddb), login.tsx 0→83.9 (memory-router render harness, real Zustand store, mocked apiFetch). web 8→17 tests; **8.6→20.6%**. | ✅ |
 | `85ae4c7` | CP-59 | [FEAT] | capture object-store tests — mocked `@aws-sdk/client-s3` (`vi.hoisted`) to cover the real `ObjectStore.put`/`get` success + IntegrationError branches, `objectStoreConfigFromEnv`, and the InMemory stub. capture 4→12 tests; **75→97.8%** (object-store.ts 29→100, pipeline.ts 96.8). | ✅ |
 | `78728ef` | CP-58 | [FEAT] | Deeper handler-path coverage for tenant/exception/audit servers — the CP-52 tests proved routing/RBAC but returned empty rows, leaving success bodies uncovered. Added data-returning paths: tenant POST-property-201 / dup-400 / GET-:id / GET-roles (**58.5→81.1%**); exception PATCH-success / no-fields-400 / cursor round-trip exercising encode+decode (**68.6→77.7%**); audit verify-success / export-success / export-400 (**73.4→75.7%**). +9 tests. | ✅ |
 | `bb5ef95` | CP-57 | [FIX] | **G-33** logger Sentry forwarder was dead code — the pino `logMethod` hook gated on `method.name` (always `"LOG"`); pino passes the numeric level as the THIRD arg, so the `=== 'error'` check never matched and Sentry forwarding NEVER fired in any environment. Fixed to gate on `level >= 50`. +9 forwarder tests (undici mocked). logger 11→20 tests; **38.7→100%**. Found purely by chasing real coverage. | ✅ |
@@ -133,16 +136,16 @@ From BRD §6.2 — original wedge of 8 use cases:
 
 | Layer | Build | Tests | Lint |
 |---|---|---|---|
-| 7 packages | ✅ green | ✅ 87 tests (errors 22, logger **20**, schemas 32, framework 13) | ✅ 0 errors |
-| 10 services | ✅ green | ✅ 216 tests (ai-gateway **37**, **auth 30**, ingest **29**, brief **26**, guest 20, **audit 16**, **exception 15**, **api-gateway 14**, **tenant 14**, **capture 12**) | ✅ 0 errors |
-| apps/web | ✅ green | ✅ 8 tests | ✅ 0 errors |
-| **Workspace total** | **19/19 green** | **311 passing, 0 failing, 7 skipped** | **0 lint errors** |
+| 7 packages | ✅ green | ✅ 87 tests (errors 22, logger 20, schemas 32, framework 13) | ✅ 0 errors |
+| 10 services | ✅ green | ✅ 213 tests (ai-gateway 37, auth 30, ingest 29, brief 26, guest 20, audit 16, exception 15, api-gateway 14, tenant 14, capture 12) | ✅ 0 errors |
+| apps/web | ✅ green | ✅ **28 tests** | ✅ 0 errors |
+| **Workspace total** | **19/19 green** | **328 passing, 0 failing, 7 skipped** | **0 lint errors** |
 
-**Delta:** +36 tests across the coverage-lift run (CP-56 auth +14, CP-57 logger +9, CP-58 tenant/exception/audit +9, CP-59 capture +8). One real bug (G-33) found and fixed while doing it.
+**Delta:** +53 tests across the full coverage-lift run. Services: CP-56 auth +14, CP-57 logger +9, CP-58 tenant/exception/audit +9, CP-59 capture +8. apps/web: CP-61 +9, CP-62 +7, CP-63 +4 (8→28). One real bug (G-33) found and fixed while doing it.
 
-### Measured coverage — post-lift (CP-60)
+### Measured coverage — post-lift (CP-64)
 
-Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was** column is the CP-55 baseline; **Now** is after the CP-56→CP-59 lift.
+Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was** column is the CP-55 baseline; **Now** is after the CP-56→CP-63 lift.
 
 | Module | Was | Now | Tests | Notes |
 |---|---|---|---|---|
@@ -158,13 +161,13 @@ Measured via `vitest run --coverage` (v8, % statements, `src/` only). The **Was*
 | audit | 73.4 | **75.7** | 14→16 | ↑ CP-58 (server.ts 78; verifyChain needs DB integration) |
 | auth | 40.1 | **74.6** | 16→30 | ↑ CP-56 (service.ts 79, server.ts 63) |
 | ai-gateway | 75.0 | 75.0 | 37 | mid |
-| api-gateway | 72.4 | 72.4 | 14 | mid (CP-62 target) |
-| apps/web | 8.6 | 8.6 | 8 | **LOWEST — no route-component tests (CP-61 target)** |
-| db | 3.2 | 3.2 | 7 skipped | **blocked — integration tests need a test Postgres (CP-63)** |
+| api-gateway | 72.4 | 72.4 | 14 | mid |
+| apps/web | 8.6 | **56.7** | 8→28 | ↑ CP-61/62/63 (login 84, exceptions 100, guests-list 100, guest-detail 84, index 88, __root 84, routeTree 100; **captures.new + prep-cards still ~3%**) |
+| db | 3.2 | 3.2 | 7 skipped | **blocked — integration tests need a test Postgres** |
 
 *(service-framework has 13 tests but no `test:coverage` script; not measured here.)*
 
-**Remaining gaps, priority order:** apps/web (8.6%, no route tests), db (3.2%, blocked on test Postgres), api-gateway (72%), ai-gateway (75%), then pushing the mid-70s services to ≥90% where unit-testable. Several modules now have a legitimate floor: each service's `start()` (binds a port — needs a live listen) and audit's `verifyChain` hash-chain logic (needs real linked rows — DB integration territory).
+**Remaining gaps, priority order:** apps/web captures.new.tsx (3.8%) + prep-cards.tsx (2.8%) — the two heaviest forms, plus main.tsx bootstrap + useOfflineReplay hook; api-gateway (72%); db (3.2%, blocked on test Postgres). Several modules have a legitimate floor: each service's `start()` (binds a port — needs a live listen) and audit's `verifyChain` hash-chain logic (needs real linked rows — DB integration territory).
 
 ---
 
@@ -204,10 +207,13 @@ All functional bugs are closed and the login loop is verified live. Remaining wo
 | CP-57 | logger Sentry HTTP-forward path tests (+ G-33 fix) | S | ✅ DONE (39→100%) |
 | CP-58 | tenant + exception + audit deeper handler-path coverage | M | ✅ DONE |
 | CP-59 | capture object-store — mock S3 client tests | S | ✅ DONE (75→98%) |
-| CP-61 | apps/web — route-component tests — lift off 8.6% (biggest single gap) | M | next |
-| CP-62 | api-gateway — broaden server.test.ts upstream-proxy coverage | M | pending |
-| CP-63 | db — point the 7 skipped integration tests at the running test Postgres | M | pending |
-| CP-64 | Re-measure aggregate, push remaining modules to ≥90%, lock baseline in COVERAGE_BASELINE.md | S | pending |
+| CP-61 | apps/web — offline-queue + login route (memory-router harness) | M | ✅ DONE (8.6→20.6%) |
+| CP-62 | apps/web — exceptions + guests-list routes (reusable harness) | M | ✅ DONE (→33.5%) |
+| CP-63 | apps/web — index + guest-detail routes (real-tree harness) | M | ✅ DONE (→56.7%) |
+| CP-65 | apps/web — captures.new + prep-cards forms (the two heaviest, ~3%) | M | next |
+| CP-66 | api-gateway — broaden server.test.ts upstream-proxy coverage | M | pending |
+| CP-67 | db — point the 7 skipped integration tests at the running test Postgres | M | pending |
+| CP-68 | Re-measure aggregate, push remaining modules to ≥90%, lock baseline in COVERAGE_BASELINE.md | S | pending |
 
 Optional live-stack hardening (not blocking coverage): a one-shot DB-migrate init container or compose `depends_on` hook so a fresh `docker compose up` provisions the schema automatically (today G-31 requires a manual `migrate`+`seed` run).
 
