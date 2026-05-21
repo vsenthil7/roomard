@@ -64,10 +64,19 @@ describe('login route', () => {
   });
 
   it('on successful login, stores tokens + principal in the auth store', async () => {
+    // The real API returns the identity under `user` (id/email/display_name/
+    // tenant_id/roles) — NOT a ready-made `principal`. The mock mirrors the real
+    // contract so this test would catch a regression of the user->principal mapping.
     apiFetchMock.mockResolvedValueOnce({
       status: 'success',
       tokens: { access_token: 'at_123', refresh_token: 'rt_456' },
-      principal: { userId: 'u1', displayName: 'Demo Admin', tenantId: 't1', roles: ['admin'] },
+      user: {
+        id: 'u1',
+        email: 'admin@demo.roomard.local',
+        display_name: 'Demo Admin',
+        tenant_id: 't1',
+        roles: ['admin'],
+      },
     });
     await renderRoute(LoginRoute, '/login');
     const user = userEvent.setup();
@@ -78,7 +87,11 @@ describe('login route', () => {
       expect(useAuthStore.getState().accessToken).toBe('at_123');
     });
     expect(useAuthStore.getState().refreshToken).toBe('rt_456');
-    expect(useAuthStore.getState().principal?.displayName).toBe('Demo Admin');
+    const principal = useAuthStore.getState().principal;
+    expect(principal?.displayName).toBe('Demo Admin');
+    expect(principal?.userId).toBe('u1');
+    expect(principal?.tenantId).toBe('t1');
+    expect(principal?.roles).toEqual(['admin']);
     // The login POST was called with snake_case body keys.
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/v1/auth/password/login',

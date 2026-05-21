@@ -75,9 +75,10 @@ export class ExceptionRepo {
     const limit = q.limit;
     params.push(limit + 1);
     const { rows } = await client.query(
-      `SELECT id, tenant_id, property_id, kind::text, status::text, severity, title, description,
+      `SELECT id, tenant_id, property_id, kind::text, status::text, severity, title,
+              detail AS description,
               payload, assigned_to, guest_id, evidence_id, created_at, resolved_at, resolved_by,
-              resolution_notes
+              resolution AS resolution_notes
        FROM exception_queue_items
        ${where.length > 0 ? 'WHERE ' + where.join(' AND ') : ''}
        ORDER BY severity DESC, created_at DESC, id DESC
@@ -132,7 +133,7 @@ export class ExceptionRepo {
       i += 1;
     }
     if (input.resolutionNotes !== undefined) {
-      sets.push(`resolution_notes = $${i}`);
+      sets.push(`resolution = $${i}`);
       params.push(input.resolutionNotes);
       i += 1;
     }

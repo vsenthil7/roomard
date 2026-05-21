@@ -46,7 +46,7 @@ if (-not (Test-Path $pwBin)) {
 
 Push-Location $runnerDir
 try {
-    $env:API_BASE_URL = if ($env:API_BASE_URL) { $env:API_BASE_URL } else { 'http://localhost:3100' }
+    $env:API_BASE_URL = if ($env:API_BASE_URL) { $env:API_BASE_URL } else { 'http://127.0.0.1:3100' }
     & $pwBin test specs/structural-review.spec.ts --config=playwright.demo.config.ts --reporter=line 2>&1 | Tee-Object -FilePath $reportFile
     $exitCode = $LASTEXITCODE
 } finally {

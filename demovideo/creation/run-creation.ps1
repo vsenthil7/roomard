@@ -56,8 +56,8 @@ if (-not (Test-Path $pwBin)) {
 }
 Push-Location $runnerDir
 try {
-    $env:WEB_BASE_URL = if ($env:WEB_BASE_URL) { $env:WEB_BASE_URL } else { 'http://localhost:8180' }
-    $env:API_BASE_URL = if ($env:API_BASE_URL) { $env:API_BASE_URL } else { 'http://localhost:3100' }
+    $env:WEB_BASE_URL = if ($env:WEB_BASE_URL) { $env:WEB_BASE_URL } else { 'http://127.0.0.1:8180' }
+    $env:API_BASE_URL = if ($env:API_BASE_URL) { $env:API_BASE_URL } else { 'http://127.0.0.1:3100' }
     & $pwBin test specs/full-walkthrough.spec.ts --config=playwright.demo.config.ts --reporter=line
     if ($LASTEXITCODE -ne 0) {
         Write-Host '[creation] playwright spec failed - aborting archive' -ForegroundColor Red

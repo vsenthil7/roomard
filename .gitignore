@@ -56,8 +56,10 @@ _backup/
 __pycache__/
 *.pyc
 
-# Demo video pipeline (keep mp4 deliverables + verification reports; ignore the rest)
-demovideo/.runner/
+# Demo video pipeline (keep mp4 deliverables, specs + verification reports; ignore installs/working dirs)
+demovideo/.runner/node_modules/
+demovideo/.runner/test-results-demo/
+demovideo/.runner/playwright-report/
 demovideo/results/creation/latest.txt
 demovideo/verification-b/frames/
 demo/_backup/

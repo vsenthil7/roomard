@@ -43,7 +43,16 @@ function Login() {
         status: 'success' | 'mfa_required';
         mfa_token?: string;
         tokens?: { access_token: string; refresh_token: string };
-        principal?: Principal;
+        // The API returns the identity under `user` (id/email/display_name/tenant_id/roles),
+        // NOT a ready-made `principal`. Map it to the store's Principal shape below.
+        user?: {
+          id: string;
+          email: string;
+          display_name: string;
+          tenant_id: string;
+          roles?: string[];
+          permissions?: string[];
+        };
       }>('/v1/auth/password/login', {
         method: 'POST',
         body: { email: values.email, password: values.password, tenant_slug: values.tenantSlug },
@@ -51,9 +60,17 @@ function Login() {
       });
       if (res.status === 'mfa_required' && res.mfa_token) {
         setMfaToken(res.mfa_token);
-      } else if (res.status === 'success' && res.tokens && res.principal) {
+      } else if (res.status === 'success' && res.tokens && res.user) {
         setTokens(res.tokens.access_token, res.tokens.refresh_token);
-        setPrincipal(res.principal);
+        setPrincipal({
+          userId: res.user.id,
+          tenantId: res.user.tenant_id,
+          email: res.user.email,
+          displayName: res.user.display_name,
+          roles: res.user.roles ?? [],
+          permissions: res.user.permissions ?? [],
+          mfaVerified: true,
+        });
         navigate({ to: '/' });
       }
     } catch (err) {
