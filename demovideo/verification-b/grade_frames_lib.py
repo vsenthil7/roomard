@@ -58,8 +58,12 @@ RUBRIC = [
         ["STAGE 4", "EXCEPTION QUEUE", "AUDIT"]),
     ("stage-4-queue-verdict", "Stage 4 verdict: exception queue + audit log both live with real event counts",
         ["QUEUE", "AUDIT", "PASS"]),
+    ("stage-5-scene-card",   "Stage 5 BDD scene card introduces the regression-test layer",
+        ["STAGE 5", "REGRESSION"]),
+    ("stage-5-integration-verdict", "Stage 5 verdict: the 12 real-DB integration tests ran and PASSED on screen",
+        ["INTEGRATION TESTS", "TOTAL", "PASS"]),
     ("title-card-closing",   "Closing card states the proof summary (live assertions, tests)",
-        ["Roomard", "assertion"]),
+        ["Roomard", "regression"]),
 ]
 
 

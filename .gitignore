@@ -60,6 +60,7 @@ __pycache__/
 demovideo/.runner/node_modules/
 demovideo/.runner/test-results-demo/
 demovideo/.runner/playwright-report/
+demovideo/.runner/integration-result.json
 demovideo/results/creation/latest.txt
 demovideo/verification-b/frames/
 demo/_backup/

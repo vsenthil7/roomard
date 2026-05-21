@@ -23,6 +23,7 @@
  */
 import { test, expect, BrowserContext, Page, APIRequestContext } from '@playwright/test';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import {
   showTitleCard,
   showSceneCard,
@@ -293,14 +294,65 @@ test.describe('Roomard demo walkthrough', () => {
     await scrollTopToBottom(page, 2_000);
     await page.waitForTimeout(1_500);
 
+    // ==================== STAGE 5 \u2014 REGRESSION TEST LAYER ====================
+    // The five production bugs (G-39..G-43) were schema drift the mocked unit suite
+    // could not see. We added real-database integration tests that run the ACTUAL
+    // service code against real Postgres and FAIL on column drift. This stage shows
+    // the REAL result of that suite, executed against this same database moments
+    // before recording (read from integration-result.json the orchestrator wrote).
+    await showSceneCard(page, {
+      step: 'STAGE 5 \u00b7 REGRESSION TEST LAYER (the bugs can\u2019t come back)',
+      given: '5 production bugs were schema drift the mocked unit tests could not catch',
+      when: 'We run 12 real-DB integration tests that exercise the real queries',
+      then: 'each guards a specific bug \u00b7 they FAIL on column drift \u00b7 here is the live result',
+      durationMs: 5_500,
+    });
+    await clearOverlay(page);
+
+    // Read the real integration-test result produced by the orchestrator just before
+    // this recording. If it is absent (spec run standalone), fall back to a clearly
+    // labelled \u201cnot run this session\u201d so we never fake a pass.
+    type SuiteResult = { service: string; guards: string; what: string; passed: number; total: number; ok: boolean };
+    let ir: { suites: SuiteResult[]; totalPassed: number; totalTests: number; allPass: boolean } | null = null;
+    try {
+      ir = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'integration-result.json'), 'utf8'));
+    } catch {
+      ir = null;
+    }
+    if (ir) {
+      const bySvc = (name: string) => ir!.suites.find((s) => s.service === name);
+      const g = bySvc('guest');
+      const t = bySvc('tenant');
+      const c = bySvc('capture');
+      await showVerdict(page, {
+        title: 'STAGE 5 \u00b7 INTEGRATION TESTS (real Postgres)',
+        request: 'pnpm vitest run tests/integration   \u00b7   DATABASE_URL=<live DB>',
+        assertions: [
+          { label: 'guest-svc (guards G-41 preferences/history/trajectory)', expected: 'all pass', actual: `${g?.passed ?? 0} of ${g?.total ?? 0}`, pass: !!g?.ok },
+          { label: 'tenant-svc (guards G-42 tenant + properties)', expected: 'all pass', actual: `${t?.passed ?? 0} of ${t?.total ?? 0}`, pass: !!t?.ok },
+          { label: 'capture-svc (guards G-43 capture read)', expected: 'all pass', actual: `${c?.passed ?? 0} of ${c?.total ?? 0}`, pass: !!c?.ok },
+          { label: 'TOTAL integration tests (FAIL on schema drift 42703)', expected: 'all green', actual: `${ir.totalPassed} of ${ir.totalTests} PASS`, pass: ir.allPass },
+        ],
+      });
+    } else {
+      await showVerdict(page, {
+        title: 'STAGE 5 \u00b7 INTEGRATION TESTS',
+        request: 'pnpm vitest run tests/integration',
+        assertions: [
+          { label: 'Integration result file', expected: 'present', actual: 'not run this session', pass: false },
+        ],
+      });
+    }
+    await page.waitForTimeout(4_500);
+
     // ==================== CLOSING TITLE ====================
     await clearOverlay(page);
     await showTitleCard(page, {
       title: 'Roomard',
       subtitle:
-        'Every stage above ran a live assertion against the product \u2014 you saw the request, the real response, and the verdict.\nMulti-tenant \u00b7 RLS-enforced \u00b7 audit-grade by default.',
+        'Every stage ran a live assertion against the product \u2014 you saw the request, the real response, and the verdict.\nThe 5 bugs found by running it for real are now locked out by 12 real-DB regression tests.',
       footnote:
-        '356 unit tests \u00b7 24 live demo assertions \u00b7 5 production bugs found by recording for real \u00b7 github.com/vsenthil7/roomard',
+        '356 unit tests \u00b7 12 real-DB integration tests \u00b7 24 live demo assertions \u00b7 github.com/vsenthil7/roomard',
       durationMs: 6_500,
     });
 

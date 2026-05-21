@@ -95,13 +95,17 @@ describeOrSkip('guest-svc · real-DB integration (G-41 regression guard)', () =>
       );
 
       // Real `stays` columns: property_id, arrival_at, departure_at, status, room_number...
+      // The booking id is unique per run (derived from the fresh guest id) so the suite
+      // is idempotent and never trips the (tenant, pms_provider, pms_booking_id) unique
+      // constraint when re-run against the dev DB.
+      const bookingId = `IT-BOOK-${id.slice(0, 8)}`;
       await client.query(
         `INSERT INTO stays (id, tenant_id, property_id, guest_id, pms_booking_id, pms_provider,
                             arrival_at, departure_at, status, room_number)
          VALUES (gen_random_uuid(), $1, '00000000-0000-4000-8000-000000000010', $2,
-                 'IT-BOOK-0001', 'manual',
+                 $3, 'manual',
                  now() - interval '40 days', now() - interval '38 days', 'checked_out', '204')`,
-        [TENANT, id],
+        [TENANT, id, bookingId],
       );
 
       // Real `issues` columns: category, severity, summary, detail, raised_at...
