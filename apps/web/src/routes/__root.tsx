@@ -52,6 +52,9 @@ function RootLayout() {
             <Link to="/exceptions" className="hover:underline">
               Exceptions
             </Link>
+            <Link to="/onboarding" className="hover:underline">
+              Set up
+            </Link>
           </nav>
           <div className="flex items-center gap-3 text-sm">
             <span>{principal.displayName}</span>

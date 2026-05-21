@@ -243,7 +243,7 @@ async function loadArrivals(
      FROM stays s
      WHERE s.property_id = $1
        AND s.arrival_at::date = $2::date
-       AND s.status IN ('booked','expected','checked_in')
+       AND s.status IN ('confirmed','checked_in')
      ORDER BY s.arrival_at ASC`,
     [propertyId, briefDate],
   );
@@ -283,9 +283,12 @@ async function loadArrivals(
     title: string;
     severity: number;
   }>(
-    `SELECT guest_id, title, severity FROM issues
-     WHERE guest_id = ANY($1::uuid[]) AND occurred_at > now() - interval '30 days'
-     ORDER BY occurred_at DESC LIMIT 200`,
+    // G-44: the real `issues` table uses `summary` (not `title`) and `raised_at`
+    // (not `occurred_at`) — same schema drift as G-41. Alias to keep the field
+    // name stable for the rest of this function.
+    `SELECT guest_id, summary AS title, severity FROM issues
+     WHERE guest_id = ANY($1::uuid[]) AND raised_at > now() - interval '30 days'
+     ORDER BY raised_at DESC LIMIT 200`,
     [guestIds],
   );
   const issueMap = new Map<string, string[]>();
