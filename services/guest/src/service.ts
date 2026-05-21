@@ -213,8 +213,9 @@ export class GuestRepo {
       supersedes_id: string | null;
     }>(
       `SELECT p.id, p.guest_id, p.kind::text, p.polarity::text, p.detail,
-              p.confidence::text AS confidence_value, COALESCE(p.confidence_calibration, 'heuristic') AS confidence_calibration,
-              p.status::text, p.source, p.first_observed_at, p.last_reinforced_at,
+              p.confidence::text AS confidence_value, 'heuristic' AS confidence_calibration,
+              p.status::text, COALESCE(p.metadata->>'source', 'observed') AS source,
+              p.first_observed_at, p.last_reinforced_at,
               p.reinforcement_count, p.supersedes_id
        FROM preferences p
        WHERE p.guest_id = $1 AND p.status = 'active'
@@ -282,8 +283,8 @@ export class GuestRepo {
       [guestId],
     );
     const { rows: issues } = await client.query(
-      `SELECT id, severity, title, occurred_at, resolved_at
-       FROM issues WHERE guest_id = $1 ORDER BY occurred_at DESC LIMIT 50`,
+      `SELECT id, severity, summary AS title, raised_at AS occurred_at, resolved_at
+       FROM issues WHERE guest_id = $1 ORDER BY raised_at DESC LIMIT 50`,
       [guestId],
     );
     return {
@@ -435,11 +436,11 @@ export async function analyseComplaintTrajectory(
     title: string;
     resolved_at: Date | null;
   }>(
-    `SELECT id, occurred_at, severity, title, resolved_at
+    `SELECT id, raised_at AS occurred_at, severity, summary AS title, resolved_at
      FROM issues
      WHERE guest_id = $1
-       AND occurred_at > now() - ($2 || ' months')::interval
-     ORDER BY occurred_at ASC`,
+       AND raised_at > now() - ($2 || ' months')::interval
+     ORDER BY raised_at ASC`,
     [args.guestId, String(TRAJECTORY_LOOKBACK_MONTHS)],
   );
 

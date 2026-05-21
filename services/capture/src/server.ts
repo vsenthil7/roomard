@@ -135,8 +135,8 @@ export function buildServer(deps: BuildDeps): FastifyInstance {
     const id = UuidSchema.parse((req.params as { evidenceId: string }).evidenceId);
     await withPrincipalContext(deps.pool, req, async (client) => {
       const { rows } = await client.query(
-        `SELECT e.id, e.kind, e.status, e.confidence, e.raw_text, e.captured_at,
-                e.property_id, e.guest_id, e.object_ref, c.fields_json
+        `SELECT e.id, e.kind, e.status, e.confidence, e.raw_text, e.occurred_at AS captured_at,
+                e.property_id, e.guest_id, e.object_ref, c.extracted_fields AS fields_json
          FROM evidence e
          LEFT JOIN card_captures c ON c.evidence_id = e.id
          WHERE e.id = $1`,

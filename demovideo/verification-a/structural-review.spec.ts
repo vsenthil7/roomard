@@ -58,7 +58,8 @@ test.describe('verification-a · structural review', () => {
     const loginBody = await loginR.json();
     expect.soft(loginBody.status, 'A0.4 login status=success').toBe('success');
     expect.soft(loginBody.tokens?.access_token, 'A0.5 access_token present').toBeTruthy();
-    expect.soft(loginBody.principal?.tenantId ?? loginBody.principal?.tenant_id, 'A0.6 principal carries a tenant').toBeTruthy();
+    // The login API returns identity under `user` (id/email/display_name/tenant_id/roles), not `principal`.
+    expect.soft(loginBody.user?.tenant_id, 'A0.6 user carries a tenant').toBeTruthy();
 
     const token: string = loginBody.tokens?.access_token ?? '';
     const authH = { headers: { Authorization: `Bearer ${token}` } };

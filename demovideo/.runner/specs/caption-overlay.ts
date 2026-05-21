@@ -162,9 +162,89 @@ export async function showCaptionPill(
   );
 }
 
+/**
+ * Test-runner-style verdict panel, docked bottom-left, that does NOT cover the
+ * UI it is verifying. Shows the real assertion, the LIVE value returned by the
+ * product, and a PASS/FAIL badge. This is what makes the proof visible in-frame:
+ * the assertion and the product's actual outcome are shown together.
+ *
+ * `assertions` is a list of { label, expected, actual, pass } rows — each is a
+ * real check run against the live API/DOM during the recording, not a caption.
+ */
+export async function showVerdict(
+  page: Page,
+  opts: {
+    title: string;
+    request?: string; // e.g. "GET /v1/guests/{id}/preferences"
+    assertions: Array<{ label: string; expected: string; actual: string; pass: boolean }>;
+  },
+): Promise<void> {
+  await page.evaluate(
+    ({ title, request, assertions, bgCard, white, textPrimary, textSecondary, green, red, teal }) => {
+      const existing = document.getElementById('roomard-verdict');
+      if (existing) existing.remove();
+      const allPass = assertions.every((a) => a.pass);
+      const panel = document.createElement('div');
+      panel.id = 'roomard-verdict';
+      panel.style.cssText = `
+        position: fixed; left: 24px; bottom: 24px; z-index: 999998;
+        width: 560px; max-width: 46vw;
+        background: ${bgCard}; color: ${white};
+        font-family: "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
+        border-radius: 12px;
+        border: 2px solid ${allPass ? green : red};
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        overflow: hidden;
+      `;
+      const rows = assertions
+        .map((a) => {
+          const badge = a.pass
+            ? `<span style="color:${green};font-weight:700;">\u2713 PASS</span>`
+            : `<span style="color:${red};font-weight:700;">\u2717 FAIL</span>`;
+          return `
+            <div style="padding:8px 0;border-top:1px solid rgba(255,255,255,0.08);">
+              <div style="display:flex;justify-content:space-between;gap:12px;">
+                <span style="color:${textPrimary};font-size:14px;">${a.label}</span>
+                ${badge}
+              </div>
+              <div style="color:${textSecondary};font-size:12px;margin-top:3px;">
+                expect: <span style="color:${textPrimary};">${a.expected}</span>
+                &nbsp;\u2192&nbsp; actual: <span style="color:${a.pass ? green : red};">${a.actual}</span>
+              </div>
+            </div>`;
+        })
+        .join('');
+      panel.innerHTML = `
+        <div style="background:${allPass ? green : red};color:#03150f;padding:8px 16px;font-weight:700;font-size:13px;letter-spacing:1px;display:flex;justify-content:space-between;">
+          <span>${title}</span>
+          <span>${allPass ? 'ALL ASSERTIONS PASS' : 'ASSERTION FAILED'}</span>
+        </div>
+        <div style="padding:10px 16px 14px;">
+          ${request ? `<div style="color:${teal};font-size:13px;margin-bottom:4px;">$ ${request}</div>` : ''}
+          ${rows}
+        </div>
+      `;
+      document.body.appendChild(panel);
+    },
+    {
+      title: opts.title,
+      request: opts.request ?? '',
+      assertions: opts.assertions,
+      bgCard: BG_CARD,
+      white: WHITE,
+      textPrimary: TEXT_PRIMARY,
+      textSecondary: TEXT_SECONDARY,
+      green: ACCENT_GREEN,
+      red: ACCENT_RED,
+      teal: ACCENT_TEAL,
+    },
+  );
+}
+
 export async function clearOverlay(page: Page): Promise<void> {
   await page.evaluate(() => {
     document.getElementById('roomard-overlay')?.remove();
     document.getElementById('roomard-pill')?.remove();
+    document.getElementById('roomard-verdict')?.remove();
   });
 }

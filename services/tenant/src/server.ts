@@ -37,7 +37,7 @@ export function buildServer(deps: { pool: RoomardPool }): FastifyInstance {
     requirePermission(principal, 'tenant.read');
     await withPrincipalContext(deps.pool, req, async (client) => {
       const { rows } = await client.query(
-        `SELECT id, slug, legal_name, tier::text, status::text, data_residency::text, created_at, metadata
+        `SELECT id, slug, name AS legal_name, tier::text, status::text, data_residency::text, created_at, metadata
          FROM tenants WHERE id = $1`,
         [principal.tenantId],
       );
@@ -52,7 +52,11 @@ export function buildServer(deps: { pool: RoomardPool }): FastifyInstance {
     void principal;
     await withPrincipalContext(deps.pool, req, async (client) => {
       const { rows } = await client.query(
-        `SELECT id, tenant_id, name, short_code, timezone, locale, address_json, status::text
+        `SELECT id, tenant_id, name, short_code, timezone, locale,
+                jsonb_build_object('line1', address_line1, 'line2', address_line2,
+                                   'city', city, 'postalCode', postal_code,
+                                   'countryCode', country_code) AS address_json,
+                status::text
          FROM properties ORDER BY name ASC`,
       );
       reply(replyHttp, 200, { items: rows });
@@ -76,18 +80,25 @@ export function buildServer(deps: { pool: RoomardPool }): FastifyInstance {
       }
       const { rows } = await client.query(
         `INSERT INTO properties (
-           id, tenant_id, name, short_code, timezone, locale, address_json, status
+           id, tenant_id, name, short_code, timezone, locale,
+           address_line1, address_line2, city, postal_code, country_code, status
          ) VALUES (
            gen_random_uuid(),
            current_setting('app.tenant_id', false)::uuid,
-           $1, $2, $3, COALESCE($4, 'en-GB'), $5::jsonb, 'active'
-         ) RETURNING id, tenant_id, name, short_code, timezone, locale, address_json, status::text`,
+           $1, $2, $3, COALESCE($4, 'en-GB'),
+           $5::jsonb->>'line1', $5::jsonb->>'line2', $5::jsonb->>'city', $5::jsonb->>'postalCode', $5::jsonb->>'countryCode',
+           'active'
+         ) RETURNING id, tenant_id, name, short_code, timezone, locale,
+           jsonb_build_object('line1', address_line1, 'line2', address_line2,
+                              'city', city, 'postalCode', postal_code,
+                              'countryCode', country_code) AS address_json,
+           status::text`,
         [
           body.name,
           body.shortCode,
           body.timezone,
           body.locale ?? null,
-          body.addressJson ? JSON.stringify(body.addressJson) : null,
+          body.addressJson ? JSON.stringify(body.addressJson) : '{}',
         ],
       );
       void principal;
@@ -101,7 +112,11 @@ export function buildServer(deps: { pool: RoomardPool }): FastifyInstance {
     const id = UuidSchema.parse((req.params as { id: string }).id);
     await withPrincipalContext(deps.pool, req, async (client) => {
       const { rows } = await client.query(
-        `SELECT id, tenant_id, name, short_code, timezone, locale, address_json, status::text
+        `SELECT id, tenant_id, name, short_code, timezone, locale,
+                jsonb_build_object('line1', address_line1, 'line2', address_line2,
+                                   'city', city, 'postalCode', postal_code,
+                                   'countryCode', country_code) AS address_json,
+                status::text
          FROM properties WHERE id = $1`,
         [id],
       );
