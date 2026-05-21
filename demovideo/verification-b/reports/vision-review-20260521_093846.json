@@ -1,0 +1,204 @@
+{
+  "frames": 73,
+  "pass_rate": 1.0,
+  "passed": 13,
+  "total": 13,
+  "rubric": [
+    {
+      "rubric": "title-card-opening",
+      "why": "Opening brand card is shown (Roomard, hackathon tag)",
+      "passed": true,
+      "needles": [
+        "Roomard",
+        "MEDO"
+      ],
+      "matched": [
+        "Roomard",
+        "MEDO"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-1-scene-card",
+      "why": "Stage 1 BDD scene card (GIVEN/WHEN/THEN) introduces the auth test",
+      "passed": true,
+      "needles": [
+        "STAGE 1",
+        "DAILY ARRIVAL BRIEF",
+        "GIVEN",
+        "WHEN",
+        "THEN"
+      ],
+      "matched": [
+        "STAGE 1",
+        "DAILY ARRIVAL BRIEF",
+        "GIVEN",
+        "WHEN",
+        "THEN"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-1-auth-verdict",
+      "why": "Stage 1 LIVE verdict panel: GET /v1/auth/me ran and PASSED on screen",
+      "passed": true,
+      "needles": [
+        "STAGE 1",
+        "AUTH",
+        "PASS"
+      ],
+      "matched": [
+        "STAGE 1",
+        "AUTH",
+        "PASS"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-1-brief",
+      "why": "The real daily arrival brief screen is shown",
+      "passed": true,
+      "needles": [
+        "arrival"
+      ],
+      "matched": [
+        "arrival"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-2-scene-card",
+      "why": "Stage 2 BDD scene card introduces the guest-lookup tests",
+      "passed": true,
+      "needles": [
+        "STAGE 2",
+        "GUEST LOOKUP"
+      ],
+      "matched": [
+        "STAGE 2",
+        "GUEST LOOKUP"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-2-directory-verdict",
+      "why": "Stage 2.1 verdict: GET /v1/guests returned real guests (live count shown)",
+      "passed": true,
+      "needles": [
+        "DIRECTORY",
+        "guests",
+        "PASS"
+      ],
+      "matched": [
+        "DIRECTORY",
+        "guests",
+        "PASS"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-2-prefs-verdict",
+      "why": "Stage 2.2 verdict: a real guest's preferences returned 200 with real values",
+      "passed": true,
+      "needles": [
+        "PREFERENCES",
+        "PASS"
+      ],
+      "matched": [
+        "PREFERENCES",
+        "PASS"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-2-trajectory-verdict",
+      "why": "Stage 2.3 verdict: UC-11 complaint-trajectory endpoint produced a verdict",
+      "passed": true,
+      "needles": [
+        "TRAJECTORY",
+        "PASS"
+      ],
+      "matched": [
+        "TRAJECTORY",
+        "PASS"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-3-scene-card",
+      "why": "Stage 3 BDD scene card introduces the card-capture test",
+      "passed": true,
+      "needles": [
+        "STAGE 3",
+        "CARD CAPTURE"
+      ],
+      "matched": [
+        "STAGE 3",
+        "CARD CAPTURE"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-3-capture-verdict",
+      "why": "Stage 3 verdict: capture-read contract proven (unknown id -> honest 404, not 500)",
+      "passed": true,
+      "needles": [
+        "CAPTURE",
+        "404",
+        "PASS"
+      ],
+      "matched": [
+        "CAPTURE",
+        "404",
+        "PASS"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-4-scene-card",
+      "why": "Stage 4 BDD scene card introduces the queue + audit test",
+      "passed": true,
+      "needles": [
+        "STAGE 4",
+        "EXCEPTION QUEUE",
+        "AUDIT"
+      ],
+      "matched": [
+        "STAGE 4",
+        "EXCEPTION QUEUE",
+        "AUDIT"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "stage-4-queue-verdict",
+      "why": "Stage 4 verdict: exception queue + audit log both live with real event counts",
+      "passed": true,
+      "needles": [
+        "QUEUE",
+        "AUDIT",
+        "PASS"
+      ],
+      "matched": [
+        "QUEUE",
+        "AUDIT",
+        "PASS"
+      ],
+      "missing": []
+    },
+    {
+      "rubric": "title-card-closing",
+      "why": "Closing card states the proof summary (live assertions, tests)",
+      "passed": true,
+      "needles": [
+        "Roomard",
+        "assertion"
+      ],
+      "matched": [
+        "Roomard",
+        "assertion"
+      ],
+      "missing": []
+    }
+  ]
+}

@@ -1,14 +1,24 @@
 """
 Shared OCR helpers + RUBRIC for the Roomard demo video. Imported by grade-frames.py.
 
-Ported from ATRIO (AT-Hack0021). Only the RUBRIC changes between projects.
+The RUBRIC mirrors what is ACTUALLY on screen in
+demovideo/.runner/specs/full-walkthrough.spec.ts (the verdict-panel edition):
+each demo stage runs a LIVE API assertion during recording and renders a
+test-runner verdict panel (showVerdict) showing the request, the product's
+real returned value, and a PASS/FAIL badge. The rubric therefore checks for
+(a) the scene-card BDD headers, and (b) the verdict-panel text that proves a
+live assertion was shown on screen.
 
-The RUBRIC mirrors the captions emitted by demovideo/.runner/specs/full-walkthrough.spec.ts.
-Each row: (id, [substrings that must ALL appear across all frames' OCR text]).
+Each row is (id, why, [substrings that must ALL appear across all frames' OCR]).
+  - id   : stable identifier for the scene/verdict being checked
+  - why  : plain-English explanation of WHAT this row proves about the video
+           (so a reader of the report understands each pass/fail, not just a code)
+  - needles: the SHORTEST distinctive substrings. OCR runs on 2s-spaced frames
+           and is imperfect, so we target text that dwells >=3s and pick 1-3
+           high-signal tokens rather than whole sentences.
 
-Note: rubric items target the SHORTEST, most-distinctive phrase from each caption.
-OCR is imperfect on the ~100-200ms pill display, so we don't insist on every
-phrase - just one or two unique identifiers per scene.
+If you change a caption or verdict title in the spec, update the matching row
+here in the same commit - the rubric and the spec are a contract.
 """
 import sys
 from pathlib import Path
@@ -21,22 +31,35 @@ except ImportError as e:
     print("  pip install -r demovideo/verification-b/requirements.txt")
     sys.exit(2)
 
-# Roomard demo rubric - matches the captions in full-walkthrough.spec.ts.
+# Roomard demo rubric - matches the on-screen text in full-walkthrough.spec.ts.
+# (id, why, needles). `why` is printed in the report so each row is self-explaining.
 RUBRIC = [
-    ("title-card-opening",          ["Roomard", "MEDO"]),
-    ("stage-1-scene-card",          ["STAGE 1", "DAILY ARRIVAL BRIEF", "GIVEN", "WHEN", "THEN"]),
-    ("stage-1-signed-in",           ["Signed in", "front-desk"]),
-    ("stage-1-brief-pill",          ["arrival brief", "priority"]),
-    ("stage-2-scene-card",          ["STAGE 2", "GUEST LOOKUP"]),
-    ("stage-2-directory-pill",      ["Guest directory", "search"]),
-    ("stage-2-trajectory-pill",     ["trajectory", "ERNIE X1"]),
-    ("stage-3-scene-card",          ["STAGE 3", "CARD CAPTURE"]),
-    ("stage-3-capture-pill",        ["Capture screen", "offline"]),
-    ("stage-3-ocr-pill",            ["PaddleOCR", "extraction"]),
-    ("stage-4-scene-card",          ["STAGE 4", "EXCEPTION QUEUE", "PREP"]),
-    ("stage-4-exceptions-pill",     ["Exception queue", "review"]),
-    ("stage-4-prep-pill",           ["prep cards", "audit log"]),
-    ("title-card-closing",          ["Roomard", "audit-grade", "356 tests"]),
+    ("title-card-opening",   "Opening brand card is shown (Roomard, hackathon tag)",
+        ["Roomard", "MEDO"]),
+    ("stage-1-scene-card",   "Stage 1 BDD scene card (GIVEN/WHEN/THEN) introduces the auth test",
+        ["STAGE 1", "DAILY ARRIVAL BRIEF", "GIVEN", "WHEN", "THEN"]),
+    ("stage-1-auth-verdict", "Stage 1 LIVE verdict panel: GET /v1/auth/me ran and PASSED on screen",
+        ["STAGE 1", "AUTH", "PASS"]),
+    ("stage-1-brief",        "The real daily arrival brief screen is shown",
+        ["arrival"]),
+    ("stage-2-scene-card",   "Stage 2 BDD scene card introduces the guest-lookup tests",
+        ["STAGE 2", "GUEST LOOKUP"]),
+    ("stage-2-directory-verdict", "Stage 2.1 verdict: GET /v1/guests returned real guests (live count shown)",
+        ["DIRECTORY", "guests", "PASS"]),
+    ("stage-2-prefs-verdict", "Stage 2.2 verdict: a real guest's preferences returned 200 with real values",
+        ["PREFERENCES", "PASS"]),
+    ("stage-2-trajectory-verdict", "Stage 2.3 verdict: UC-11 complaint-trajectory endpoint produced a verdict",
+        ["TRAJECTORY", "PASS"]),
+    ("stage-3-scene-card",   "Stage 3 BDD scene card introduces the card-capture test",
+        ["STAGE 3", "CARD CAPTURE"]),
+    ("stage-3-capture-verdict", "Stage 3 verdict: capture-read contract proven (unknown id -> honest 404, not 500)",
+        ["CAPTURE", "404", "PASS"]),
+    ("stage-4-scene-card",   "Stage 4 BDD scene card introduces the queue + audit test",
+        ["STAGE 4", "EXCEPTION QUEUE", "AUDIT"]),
+    ("stage-4-queue-verdict", "Stage 4 verdict: exception queue + audit log both live with real event counts",
+        ["QUEUE", "AUDIT", "PASS"]),
+    ("title-card-closing",   "Closing card states the proof summary (live assertions, tests)",
+        ["Roomard", "assertion"]),
 ]
 
 

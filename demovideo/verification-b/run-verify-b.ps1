@@ -40,10 +40,12 @@ if (-not (Get-Command tesseract -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# 3) Extract frames (1 per 2s -> ~120-150 frames for a 4-5 min video)
+# 3) Extract frames. Sample 1 per 1s: verdict panels dwell >=3s, so each lands
+#    on >=3 frames - this makes the OCR rubric robust to a single mangled frame
+#    (the previous 1-per-2s sampling was the main cause of flaky verify-b runs).
 if (Test-Path $framesDir) { Remove-Item -Recurse -Force $framesDir }
-Write-Host '[verify-b] extracting frames (1 per 2s) via ffmpeg' -ForegroundColor Cyan
-python (Join-Path $here 'extract-frames.py') --video $videoPath --out $framesDir --every 2
+Write-Host '[verify-b] extracting frames (1 per 1s) via ffmpeg' -ForegroundColor Cyan
+python (Join-Path $here 'extract-frames.py') --video $videoPath --out $framesDir --every 1
 if ($LASTEXITCODE -ne 0) {
     Write-Host '[verify-b] extract-frames failed' -ForegroundColor Red
     exit $LASTEXITCODE
