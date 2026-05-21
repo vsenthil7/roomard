@@ -695,3 +695,60 @@ Test results published to a dashboard (e.g., Grafana-backed) showing:
 ---
 
 *End of Roomard Test Strategy & Test Case Skeleton v1.0 — 18 May 2026.*
+
+---
+
+## 17. Real-database integration tests — the schema-drift regression layer (added CP-86, 21 May 2026)
+
+### Why this layer exists
+
+The service unit suites drive each handler with a fake `pg` client (`createFakePool`, or a per-test `fakeClient`) that returns whatever rows the test author typed. That is fast and good for asserting routing, auth, error envelopes, and row→DTO mapping — but it has a structural blind spot: **the fake never parses the SQL or checks column names against the real schema.** A query can `SELECT a_column_that_does_not_exist` and the fake will still return a hand-written row, so the unit test passes while the endpoint returns HTTP 500 in production.
+
+That blind spot is not hypothetical. It is exactly how five production bugs shipped green:
+
+| Bug | Service | Drift (code referenced → real column) | Symptom |
+|---|---|---|---|
+| G-39 | exception | `description`/`resolution_notes` → `detail`/`resolution` | `GET /v1/exceptions` 500 |
+| G-40 | web | `res.principal` → `res.user` (the unit test mocked a fictional `principal`) | login silently no-op |
+| G-41 | guest | `confidence_calibration`/`source`, `occurred_at`/`title` → `confidence`/`metadata`, `raised_at`/`summary` | preferences, history, trajectory 500 |
+| G-42 | tenant | `legal_name`, `address_json` → `name`, discrete address columns | `/v1/tenant`, `/v1/properties` 500 |
+| G-43 | capture | `captured_at`, `fields_json` → `occurred_at`, `extracted_fields` | `/v1/captures/:id` 500 |
+
+All five were found by running the product for real (recording the demo against the live stack), never by the unit suite. The integration layer closes that gap: each test runs the **actual exported production code** against a **real Postgres database**, so any column drift raises Postgres error `42703` and the test fails — which the fake-pool tests cannot do.
+
+### What is covered
+
+| File | Guards | Tests | What it runs for real |
+|---|---|---|---|
+| `services/guest/tests/integration/service-db.test.ts` | G-41 | 4 | `GuestRepo.getPreferences`, `getHistory`, `analyseComplaintTrajectory` against real `preferences`/`stays`/`issues` |
+| `services/tenant/tests/integration/server-db.test.ts` | G-42 | 5 | `buildServer()` HTTP routes `/v1/tenant`, `/v1/properties` (list, by-id, insert) via `app.inject()` on a real pool |
+| `services/capture/tests/integration/server-db.test.ts` | G-43 | 3 | `buildServer()` HTTP route `GET /v1/captures/:id` (real `evidence`⋈`card_captures`), plus the unknown-id→404 fix |
+
+Each suite also includes a **meta-assertion** that queries `information_schema.columns` to prove the phantom columns genuinely do not exist (and the real ones do) — so the guard demonstrably has teeth and would have failed pre-fix, rather than passing for an unrelated reason. Each `it(...)` description states what it proves and which bug it guards.
+
+### How to run
+
+The integration tests are gated on `DATABASE_URL`. Without it they **skip cleanly** (announced in the output), so the default `pnpm test` / `pnpm -r --filter '!@roomard/web-e2e' run test` stays green with no database. With a live Postgres they run for real:
+
+```
+# from the repo root, against the dev container Postgres
+set DATABASE_URL=postgres://roomard:roomard_dev_pwd@127.0.0.1:5532/roomard   # Windows
+export DATABASE_URL=postgres://roomard:roomard_dev_pwd@127.0.0.1:5532/roomard # *nix
+pnpm --filter @roomard/guest-svc exec vitest run tests/integration
+pnpm --filter @roomard/tenant-svc exec vitest run tests/integration
+pnpm --filter @roomard/capture-svc exec vitest run tests/integration
+```
+
+The seeds are idempotent (upsert on fixed ids, or unique per-run values) and run inside `withTenantContext`, so they exercise RLS and the audit trigger exactly as production does and are safe to re-run against the dev DB.
+
+### Note on the workspace test command
+
+`pnpm -r run test` aborts at the first failing package, and `@roomard/web-e2e` (Playwright) requires a running web server, so a bare `pnpm -r run test` fails on that package alone — this is environmental, not a unit-test failure. Run the unit suites with `pnpm -r --filter '!@roomard/web-e2e' run test`; run the e2e suite separately against a started stack.
+
+---
+
+## 18. Document control (continued)
+
+| Version | Date | Author | Changes |
+|---|---|---|---|
+| 1.1 | 21 May 2026 | Senthil with Claude | Added §17 real-database integration test layer (12 tests across guest/tenant/capture) guarding the G-39..G-43 schema-drift class; documented DATABASE_URL gating and the web-e2e workspace-test caveat. |
