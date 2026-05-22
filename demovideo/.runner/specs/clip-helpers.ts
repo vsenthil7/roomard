@@ -18,6 +18,8 @@ export {
   showSceneCard,
   showCaptionPill,
   showVerdict,
+  showStepBanner,
+  clearBanner,
   clearOverlay,
 } from './caption-overlay';
 
@@ -95,4 +97,89 @@ export async function signInAndGetToken(page: Page, api: APIRequestContext): Pro
   await page.getByTestId('signin').click();
   await expect(page).not.toHaveURL(/\/login/, { timeout: 12_000 });
   return token;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Live-interaction helpers — these make the action VISIBLE on camera so the    */
+/* recording shows the product being USED, not just pages being shown.        */
+/* -------------------------------------------------------------------------- */
+
+/** Plain pause, for letting the viewer read/watch. */
+export async function pause(page: Page, ms = 900): Promise<void> {
+  await page.waitForTimeout(ms);
+}
+
+/**
+ * Inject a soft “spotlight” ring on an element so the eye is drawn to where the
+ * next action happens, then remove it. Pure visual aid; no behaviour change.
+ */
+async function spotlight(page: Page, selector: string, ms = 700): Promise<void> {
+  await page.evaluate(
+    ({ selector }) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const ring = document.createElement('div');
+      ring.id = 'roomard-spotlight';
+      ring.style.cssText = `
+        position: fixed; z-index: 999996; pointer-events: none;
+        left: ${r.left - 6}px; top: ${r.top - 6}px;
+        width: ${r.width + 12}px; height: ${r.height + 12}px;
+        border: 3px solid #10b981; border-radius: 10px;
+        box-shadow: 0 0 0 4px rgba(16,185,129,0.25);
+        transition: opacity 0.2s;
+      `;
+      document.getElementById('roomard-spotlight')?.remove();
+      document.body.appendChild(ring);
+    },
+    { selector },
+  );
+  await page.waitForTimeout(ms);
+}
+
+async function clearSpotlight(page: Page): Promise<void> {
+  await page.evaluate(() => document.getElementById('roomard-spotlight')?.remove());
+}
+
+/**
+ * Type into a field by data-testid, character-visible (Playwright slowMo gives
+ * per-key delay), after spotlighting it so the viewer sees WHERE the data goes.
+ */
+export async function typeInto(
+  page: Page,
+  testId: string,
+  text: string,
+  opts: { clear?: boolean } = {},
+): Promise<void> {
+  const loc = page.getByTestId(testId);
+  await loc.scrollIntoViewIfNeeded().catch(() => {});
+  await spotlight(page, `[data-testid="${testId}"]`, 450);
+  await loc.click();
+  if (opts.clear) await loc.fill('');
+  await loc.pressSequentially(text, { delay: 45 });
+  await clearSpotlight(page);
+  await page.waitForTimeout(250);
+}
+
+/** Select an option in a <select> by data-testid (spotlighted). */
+export async function selectOptionByTestId(
+  page: Page,
+  testId: string,
+  opt: { label?: string; value?: string; index?: number },
+): Promise<void> {
+  await spotlight(page, `[data-testid="${testId}"]`, 450);
+  const loc = page.getByTestId(testId);
+  if (opt.label) await loc.selectOption({ label: opt.label }).catch(() => loc.selectOption({ index: opt.index ?? 1 }));
+  else if (opt.value) await loc.selectOption(opt.value);
+  else await loc.selectOption({ index: opt.index ?? 1 });
+  await clearSpotlight(page);
+  await page.waitForTimeout(250);
+}
+
+/** Spotlight a control by testid, pause so the viewer sees it, then click it. */
+export async function highlightAndClick(page: Page, testId: string, dwellMs = 650): Promise<void> {
+  await spotlight(page, `[data-testid="${testId}"]`, dwellMs);
+  await page.getByTestId(testId).click();
+  await clearSpotlight(page);
+  await page.waitForTimeout(350);
 }

@@ -22,7 +22,6 @@ interface GuestRow {
   id: string;
   tenant_id: string;
   display_name: string;
-  email: string | null;
   email_lower: string | null;
   phone_e164: string | null;
   home_country_code: string | null;
@@ -40,7 +39,8 @@ function rowToGuest(r: GuestRow): Guest {
     id: r.id,
     tenantId: r.tenant_id,
     displayName: r.display_name,
-    email: r.email ?? undefined,
+    // G-56: the real column is email_lower (there is no `email` column).
+    email: r.email_lower ?? undefined,
     phoneE164: r.phone_e164 ?? undefined,
     homeCountryCode: r.home_country_code ?? undefined,
     nameVariants: r.name_variants ?? [],
@@ -66,16 +66,18 @@ export class GuestRepo {
       }
     }
     const { rows } = await client.query<GuestRow>(
+      // G-56: real column is email_lower (lowercased), not email; and
+      // attention_flags is jsonb (not text[]).
       `INSERT INTO guests (
-        id, tenant_id, display_name, email, phone_e164, home_country_code,
+        id, tenant_id, display_name, email_lower, phone_e164, home_country_code,
         name_variants, pms_guest_ids, attention_flags
       ) VALUES (
         gen_random_uuid(),
         current_setting('app.tenant_id', false)::uuid,
-        $1, $2, $3, $4,
+        $1, lower($2), $3, $4,
         COALESCE($5::text[], ARRAY[]::text[]),
         COALESCE($6::jsonb, '{}'::jsonb),
-        COALESCE($7::text[], ARRAY[]::text[])
+        COALESCE($7::jsonb, '[]'::jsonb)
       )
       RETURNING *`,
       [
@@ -85,7 +87,7 @@ export class GuestRepo {
         input.homeCountryCode ?? null,
         input.nameVariants ?? null,
         input.pmsGuestIds ? JSON.stringify(input.pmsGuestIds) : null,
-        input.attentionFlags ?? null,
+        input.attentionFlags ? JSON.stringify(input.attentionFlags) : null,
       ],
     );
     return rowToGuest(rows[0]!);
@@ -110,11 +112,17 @@ export class GuestRepo {
       i += 1;
     };
     if (input.displayName !== undefined) push('display_name', input.displayName);
-    if (input.email !== undefined) push('email', input.email);
+    // G-56: real column is email_lower (lowercased), not email.
+    if (input.email !== undefined) push('email_lower', input.email ? input.email.toLowerCase() : null);
     if (input.phoneE164 !== undefined) push('phone_e164', input.phoneE164);
     if (input.homeCountryCode !== undefined) push('home_country_code', input.homeCountryCode);
     if (input.nameVariants !== undefined) push('name_variants', input.nameVariants);
-    if (input.attentionFlags !== undefined) push('attention_flags', input.attentionFlags);
+    // G-56: attention_flags is jsonb, not text[].
+    if (input.attentionFlags !== undefined) {
+      sets.push(`attention_flags = ${i}::jsonb`);
+      params.push(JSON.stringify(input.attentionFlags));
+      i += 1;
+    }
     if (input.pmsGuestIds !== undefined) {
       sets.push(`pms_guest_ids = $${i}::jsonb`);
       params.push(JSON.stringify(input.pmsGuestIds));

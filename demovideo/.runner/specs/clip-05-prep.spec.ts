@@ -1,12 +1,18 @@
 /**
- * Clip 05 — Housekeeping prep cards (UC-09).
- * Expected flow first, then the live prep-cards screen + assertion that cards
- * generated for tomorrow's arrivals.
+ * Clip 05 — UC-09 Housekeeping prep cards.
+ *
+ * Three beats:
+ *   1) TEST CASE  — scene card.
+ *   2) SCREEN FLOW — open the prep cards; a banner explains the per-room cards
+ *                    and the prep items (allergies, pillows, temperature) as the
+ *                    screen scrolls through them.
+ *   3) LIVE TEST  — assert one card per arriving room, each with real prep items.
  */
 import { test } from '@playwright/test';
 import {
-  showSceneCard, showVerdict, clearOverlay, scrollTopToBottom,
-  signInAndGetToken, liveCall, WEB_BASE, DEMO_PROPERTY_ID,
+  showSceneCard, showStepBanner, showVerdict, clearBanner, clearOverlay,
+  scrollTopToBottom, signInAndGetToken, liveCall, pause,
+  WEB_BASE, DEMO_PROPERTY_ID,
 } from './clip-helpers';
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
@@ -16,33 +22,47 @@ test('clip-05-prep', async ({ page, playwright }) => {
   const api = await playwright.request.newContext({ ignoreHTTPSErrors: true });
 
   await showSceneCard(page, {
-    step: 'STEP 5 \u00b7 HOUSEKEEPING PREP (UC-09)',
+    step: 'TEST CASE \u00b7 UC-09 \u00b7 HOUSEKEEPING PREP',
     given: 'Tomorrow\u2019s arrivals each need their room prepared to their preferences',
     when: 'Housekeeping opens their prep cards on a phone',
-    then: 'One card per room \u2014 prep items (allergies, pillows, temperature) and a warm note',
-    durationMs: 5_500,
+    then: 'One card per room \u2014 the prep items that matter (allergies, pillows, temperature) and a warm note',
+    durationMs: 6_000,
   });
   await clearOverlay(page);
 
   const token = await signInAndGetToken(page, api);
   await page.goto(`${WEB_BASE}/prep-cards`);
-  await page.waitForTimeout(1_500);
-  await scrollTopToBottom(page, 3_000);
-  await page.waitForTimeout(800);
+  await pause(page, 1_400);
+
+  await showStepBanner(page, {
+    stepLabel: 'PREP \u00b7 ONE CARD PER ROOM',
+    headline: 'Each arriving room gets its own card \u2014 name, room number, arrival time.',
+    detail: 'Generated the day before from the guest\u2019s preferences.',
+  });
+  await pause(page, 2_400);
+
+  await showStepBanner(page, {
+    stepLabel: 'PREP \u00b7 THE ITEMS THAT MATTER',
+    headline: 'Allergies, pillows, temperature, dietary \u2014 turned into a room-prep checklist.',
+    detail: 'A captured \u201cTwo firm pillows\u201d flows straight onto the housekeeper\u2019s card.',
+  });
+  await scrollTopToBottom(page, 3_400);
+  await pause(page, 1_000);
+  await clearBanner(page);
 
   const cards = await liveCall(api, token, 'GET', `/v1/properties/${DEMO_PROPERTY_ID}/prep-cards/${todayIso()}`);
   const items = (cards.body as { items?: Array<{ display_name?: string; prep_items?: string[] }> })?.items ?? [];
   const withItems = items.filter((c) => (c.prep_items?.length ?? 0) > 0).length;
 
   await showVerdict(page, {
-    title: 'STEP 5 \u00b7 PREP CARDS',
+    title: 'UC-09 \u00b7 PREP CARDS',
     request: 'GET /v1/properties/{id}/prep-cards/{date}',
     assertions: [
-      { label: 'Status', expected: '200', actual: String(cards.status), pass: cards.status === 200 },
-      { label: 'Prep cards generated', expected: '3', actual: String(items.length), pass: items.length === 3 },
-      { label: 'Cards with prep items', expected: '\u2265 1', actual: String(withItems), pass: withItems >= 1 },
+      { label: 'Cards loaded', expected: '200', actual: String(cards.status), pass: cards.status === 200 },
+      { label: 'One card per arriving room', expected: '3', actual: String(items.length), pass: items.length === 3 },
+      { label: 'Cards carry real prep items', expected: '\u2265 1', actual: String(withItems), pass: withItems >= 1 },
     ],
   });
-  await page.waitForTimeout(4_500);
+  await pause(page, 4_800);
   await clearOverlay(page);
 });

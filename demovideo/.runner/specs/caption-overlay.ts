@@ -241,10 +241,66 @@ export async function showVerdict(
   );
 }
 
+/**
+ * A non-blocking "narrator" banner docked TOP-RIGHT that explains what is
+ * happening on THIS screen while the live interaction runs underneath it. Unlike
+ * showSceneCard (full-screen, between steps), this stays out of the way so the
+ * viewer watches the product being used and reads the explanation at the same
+ * time. Call it as the cursor arrives on each screen of the flow.
+ *
+ *   stepLabel:  e.g. "SCREEN 2 of 3 · ADD GUEST"
+ *   headline:   one short line, what the user is doing here
+ *   detail:     optional second line, why / what to watch
+ */
+export async function showStepBanner(
+  page: Page,
+  opts: { stepLabel: string; headline: string; detail?: string },
+): Promise<void> {
+  await page.evaluate(
+    ({ stepLabel, headline, detail, bgCard, white, textSecondary, teal, blue }) => {
+      const existing = document.getElementById('roomard-banner');
+      if (existing) existing.remove();
+      const banner = document.createElement('div');
+      banner.id = 'roomard-banner';
+      banner.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 999997;
+        width: 360px; max-width: 42vw;
+        background: ${bgCard}; color: ${white};
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        border-radius: 12px; border-left: 5px solid ${teal};
+        box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+        padding: 14px 18px;
+      `;
+      banner.innerHTML = `
+        <div style="font-size:12px;letter-spacing:1.5px;color:${blue};font-weight:700;margin-bottom:6px;">${stepLabel}</div>
+        <div style="font-size:18px;font-weight:600;line-height:1.35;">${headline}</div>
+        ${detail ? `<div style="font-size:14px;color:${textSecondary};margin-top:6px;line-height:1.4;">${detail}</div>` : ''}
+      `;
+      document.body.appendChild(banner);
+    },
+    {
+      stepLabel: opts.stepLabel,
+      headline: opts.headline,
+      detail: opts.detail ?? '',
+      bgCard: BG_CARD,
+      white: WHITE,
+      textSecondary: TEXT_SECONDARY,
+      teal: ACCENT_TEAL,
+      blue: ACCENT_BLUE,
+    },
+  );
+}
+
+/** Remove just the step banner (leave verdict/pill in place). */
+export async function clearBanner(page: Page): Promise<void> {
+  await page.evaluate(() => document.getElementById('roomard-banner')?.remove());
+}
+
 export async function clearOverlay(page: Page): Promise<void> {
   await page.evaluate(() => {
     document.getElementById('roomard-overlay')?.remove();
     document.getElementById('roomard-pill')?.remove();
     document.getElementById('roomard-verdict')?.remove();
+    document.getElementById('roomard-banner')?.remove();
   });
 }

@@ -1,12 +1,20 @@
 /**
- * Clip 03 — Mid-conversation guest lookup + trajectory (UC-08 / UC-11).
- * Open the arriving guest's profile; prove preferences, the say-this line and
- * the complaint-trajectory analysis are all real.
+ * Clip 03 — UC-08 / UC-11 Know the guest: profile, history, and a live
+ * "Say this" generation.
+ *
+ * Three beats:
+ *   1) TEST CASE  — scene card.
+ *   2) SCREEN FLOW — open the guest profile; a banner explains the preferences
+ *                    and stay history; then the agent clicks "Generate Say this"
+ *                    LIVE and the AI-written greeting card appears.
+ *   3) LIVE TEST  — assert preferences exist, the say-this greeting is real, and
+ *                   the complaint-trajectory analysis returns a decision.
  */
 import { test } from '@playwright/test';
 import {
-  showSceneCard, showVerdict, clearOverlay, scrollTopToBottom,
-  signInAndGetToken, liveCall, WEB_BASE,
+  showSceneCard, showStepBanner, showVerdict, clearBanner, clearOverlay,
+  scrollTopToBottom, signInAndGetToken, liveCall, highlightAndClick, pause,
+  WEB_BASE,
 } from './clip-helpers';
 
 test('clip-03-guest', async ({ page, playwright }) => {
@@ -14,26 +22,49 @@ test('clip-03-guest', async ({ page, playwright }) => {
   const api = await playwright.request.newContext({ ignoreHTTPSErrors: true });
 
   await showSceneCard(page, {
-    step: 'STEP 3 \u00b7 KNOW THE GUEST (UC-08 / UC-11)',
+    step: 'TEST CASE \u00b7 UC-08 / UC-11 \u00b7 KNOW THE GUEST',
     given: 'A returning guest is at the desk and the agent needs context fast',
-    when: 'The agent opens the guest profile',
-    then: 'Preferences, stay history, a say-this line and a complaint-trajectory read are all there',
-    durationMs: 5_500,
+    when: 'The agent opens the guest profile and asks for a greeting',
+    then: 'Preferences, stay history, a live AI \u201cSay this\u201d line, and a complaint-trajectory read are all there',
+    durationMs: 6_000,
   });
   await clearOverlay(page);
 
   const token = await signInAndGetToken(page, api);
 
-  // Resolve James Patel's id, then open his profile.
+  // Resolve James Patel's id (the flagged guest), then open his profile.
   const guests = await liveCall(api, token, 'GET', '/v1/guests');
   const arr = (guests.body as { items?: Array<{ id: string; display_name?: string }> })?.items ?? [];
   const james = arr.find((g) => (g.display_name ?? '').includes('James')) ?? arr[0];
   const gid = james?.id ?? '';
 
   await page.goto(`${WEB_BASE}/guests/${gid}`);
-  await page.waitForTimeout(1_500);
+  await pause(page, 1_400);
+
+  await showStepBanner(page, {
+    stepLabel: 'PROFILE \u00b7 PREFERENCES & HISTORY',
+    headline: 'Every preference Roomard has learned, each with a confidence score.',
+    detail: 'Built up automatically from captures and stays \u2014 allergies, room, bedding, dietary.',
+  });
   await scrollTopToBottom(page, 3_000);
-  await page.waitForTimeout(800);
+  await pause(page, 700);
+
+  await showStepBanner(page, {
+    stepLabel: 'PROFILE \u00b7 GENERATE \u201cSAY THIS\u201d',
+    headline: 'The agent asks Roomard for a greeting to use right now.',
+    detail: 'Real AI call \u2014 ERNIE drafts a one-line greeting from the top preferences.',
+  });
+  await pause(page, 1_400);
+  // Scroll back to top so the button + resulting card are in view.
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+  await pause(page, 500);
+  await highlightAndClick(page, 'say-this-button', 800);
+
+  // Wait for the AI-written card to appear.
+  const card = page.getByTestId('say-this-card');
+  const cardShown = await card.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true).catch(() => false);
+  await pause(page, 2_400);
+  await clearBanner(page);
 
   const prefs = await liveCall(api, token, 'GET', `/v1/guests/${gid}/preferences`);
   const sayThis = await liveCall(api, token, 'GET', `/v1/guests/${gid}/say-this`);
@@ -45,15 +76,15 @@ test('clip-03-guest', async ({ page, playwright }) => {
   const flagged = (traj.body as { flagged?: boolean })?.flagged;
 
   await showVerdict(page, {
-    title: 'STEP 3 \u00b7 GUEST PROFILE',
+    title: 'UC-08 / UC-11 \u00b7 GUEST PROFILE',
     request: 'GET /v1/guests/{id}/preferences \u00b7 say-this \u00b7 trajectory',
     assertions: [
-      { label: 'Preferences', expected: '\u2265 1', actual: String(prefCount), pass: prefCount >= 1 },
-      { label: 'Say-this greeting', expected: 'non-empty', actual: greeting ? 'present' : 'empty', pass: !!greeting },
-      { label: 'Trajectory analysis', expected: '200', actual: String(traj.status), pass: traj.status === 200 },
-      { label: 'Flagged decision returned', expected: 'true/false', actual: String(flagged), pass: typeof flagged === 'boolean' },
+      { label: 'Preferences on file', expected: '\u2265 1', actual: String(prefCount), pass: prefCount >= 1 },
+      { label: '\u201cSay this\u201d card generated on screen', expected: 'shown', actual: cardShown ? 'shown' : 'no', pass: cardShown },
+      { label: 'Greeting is real text', expected: 'non-empty', actual: greeting ? 'present' : 'empty', pass: !!greeting },
+      { label: 'Trajectory decision returned', expected: 'true/false', actual: String(flagged), pass: typeof flagged === 'boolean' },
     ],
   });
-  await page.waitForTimeout(4_500);
+  await pause(page, 5_000);
   await clearOverlay(page);
 });
