@@ -23,19 +23,25 @@ const log = createLogger({ name: 'brief.prep-cards' });
 // the AI invocation includes the prep_items in the prompt.
 const MAX_PREP_ITEMS = 8;
 
-// Preference kinds relevant to room prep. Pulled from prefereces.kind enum.
-// Order is priority for display.
+// Preference kinds relevant to room prep, using the REAL preference_kind enum
+// (pillow, temperature, dietary, allergy, room_position, room_type, view,
+// bedding, amenity, service, food_dislike, food_like, language, other).
+// G-54: the previous list used stale names (accessibility/celebration/food/
+// beverage/family/pet/room) that aren't in the enum, so guests whose
+// preferences were room_position/amenity/service/dietary/view/language got
+// empty prep cards. Order is display priority — safety/dietary first.
 const ROOM_PREP_KINDS = [
   'allergy',
-  'accessibility',
+  'dietary',
   'pillow',
+  'bedding',
   'temperature',
-  'celebration',
-  'food',
-  'beverage',
-  'family',
-  'pet',
-  'room',
+  'room_position',
+  'room_type',
+  'view',
+  'amenity',
+  'service',
+  'language',
   'other',
 ];
 
@@ -380,12 +386,14 @@ export async function listPrepCards(
 }
 
 function formatPrepItem(kind: string, polarity: string, detail: string): string {
-  // "allergy: peanuts" reads better than "allergy(allergy): peanuts".
-  // Drop polarity for the allergy/requirement kinds where it's redundant.
-  if (polarity === 'allergy' || polarity === 'requirement') {
-    return `${polarity}: ${detail}`;
-  }
-  return `${kind}: ${detail}`;
+  // Make the line read naturally for housekeeping. G-54: real preference_polarity
+  // values are likes/dislikes/requires/avoids/noted. Lead with the actionable
+  // verb for requires/avoids (“requires: ...”, “avoid: ...”); otherwise label by
+  // kind so the item is self-describing on the card.
+  if (polarity === 'requires') return `requires: ${detail}`;
+  if (polarity === 'avoids') return `avoid: ${detail}`;
+  if (kind === 'allergy') return `allergy: ${detail}`;
+  return `${kind.replace(/_/g, ' ')}: ${detail}`;
 }
 
 function addOneDay(isoDate: string): string {

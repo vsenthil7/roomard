@@ -102,6 +102,48 @@ describe('api-gateway server (G-28 regression)', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('G-49: POST with multipart/form-data (card upload) is NOT rejected with 415 and reaches the proxy', async () => {
+    // The card-capture upload is multipart/form-data. The gateway originally
+    // registered a parser only for application/json, so Fastify threw
+    // FST_ERR_CTP_INVALID_MEDIA_TYPE (415) at the edge and the upload never
+    // reached capture-svc. The catch-all '*' buffering parser fixes the whole
+    // class. With a valid bearer + capture.write, the request must reach the
+    // mocked upstream (200), proving it was NOT rejected as 415/415-masked-500.
+    undiciMock.mockClear();
+    const token = await mintTestToken({ roles: ['admin'] });
+    const boundary = '----roomardtestboundary';
+    const body =
+      `--${boundary}\r\n` +
+      'Content-Disposition: form-data; name="property_id"\r\n\r\n' +
+      '00000000-0000-4000-8000-000000000010\r\n' +
+      `--${boundary}\r\n` +
+      'Content-Disposition: form-data; name="file"; filename="card.png"\r\n' +
+      'Content-Type: image/png\r\n\r\n' +
+      'fake-png-bytes\r\n' +
+      `--${boundary}--\r\n`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/captures',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: body,
+    });
+    // What we're proving: NOT 415 (and not the 500 it used to be masked as).
+    // The mocked upstream replies 200, so the request reached the proxy handler.
+    expect(res.statusCode).not.toBe(415);
+    expect(res.statusCode).toBe(200);
+    expect(undiciMock).toHaveBeenCalledTimes(1);
+    // The multipart content-type (with boundary) must be forwarded intact so the
+    // upstream can parse the parts.
+    const headers = (undiciMock.mock.calls[0]![1] as { headers: Record<string, string> }).headers;
+    const lower: Record<string, string> = {};
+    for (const [k, v] of Object.entries(headers)) lower[k.toLowerCase()] = v;
+    expect(lower['content-type']).toContain('multipart/form-data');
+    expect(lower['content-type']).toContain(boundary);
+  });
+
   it('G-28: error handler forwards Fastify client-error statusCode rather than masking as 500', async () => {
     // Send a body that exceeds bodyLimit \u2014 Fastify will throw FST_ERR_CTP_BODY_TOO_LARGE
     // with statusCode 413. After the fix the handler forwards 413, not 500.
