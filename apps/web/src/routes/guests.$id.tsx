@@ -17,12 +17,12 @@ export const Route = createRoute({
 
 interface GuestProfile {
   id: string;
-  displayName: string;
+  display_name: string;
   email?: string;
-  phoneE164?: string;
-  homeCountryCode?: string;
-  loyaltyTiers: Record<string, string>;
-  attentionFlags: string[];
+  phone_e164?: string;
+  home_country_code?: string;
+  loyalty_tiers: Record<string, string>;
+  attention_flags: string[];
 }
 
 interface PreferenceItem {
@@ -30,33 +30,33 @@ interface PreferenceItem {
   kind: string;
   polarity: string;
   detail: string;
-  confidence: { value: number; calibration: string };
-  reinforcementCount: number;
-  lastReinforcedAt: string;
+  confidence: { value: number; calibration: string } | number;
+  reinforcement_count: number;
+  last_reinforced_at: string;
 }
 
 interface HistoryStay {
   id: string;
-  propertyId: string;
-  arrivalAt: string;
-  departureAt: string;
+  property_id: string;
+  arrival_at: string;
+  departure_at: string;
   status: string;
-  roomNumber: string | null;
+  room_number: string | null;
 }
 
 interface HistoryIssue {
   id: string;
   severity: number;
   title: string;
-  occurredAt: string;
-  resolvedAt: string | null;
+  occurred_at: string;
+  resolved_at: string | null;
 }
 
 interface SayThisSuggestion {
   greeting: string;
   context: string;
-  preferenceCallouts: string[];
-  modelId: string;
+  preference_callouts: string[];
+  model_id: string;
 }
 
 function GuestDetail() {
@@ -93,10 +93,10 @@ function GuestDetail() {
       <Link to="/guests" className="text-sm text-roomard-700 underline">← Back to guests</Link>
       <header className="flex items-baseline justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">{profile.data.displayName}</h1>
+          <h1 className="text-2xl font-bold">{profile.data.display_name}</h1>
           <div className="text-sm text-roomard-700">
-            {profile.data.email ?? '—'} · {profile.data.phoneE164 ?? '—'} ·{' '}
-            {profile.data.homeCountryCode ?? '—'}
+            {profile.data.email ?? '—'} · {profile.data.phone_e164 ?? '—'} ·{' '}
+            {profile.data.home_country_code ?? '—'}
           </div>
         </div>
         <button
@@ -114,11 +114,11 @@ function GuestDetail() {
           <h2 className="text-xs uppercase tracking-wide text-roomard-700">Say this</h2>
           <p className="text-lg italic mt-2">&ldquo;{sayThis.data.greeting}&rdquo;</p>
           <ul className="mt-2 text-sm text-roomard-700 list-disc pl-5">
-            {sayThis.data.preferenceCallouts.map((c, i) => (
+            {(sayThis.data.preference_callouts ?? []).map((c, i) => (
               <li key={i}>{c}</li>
             ))}
           </ul>
-          <div className="mt-2 text-xs text-roomard-700">Model: {sayThis.data.modelId}</div>
+          <div className="mt-2 text-xs text-roomard-700">Model: {sayThis.data.model_id}</div>
         </section>
       )}
 
@@ -139,7 +139,7 @@ function GuestDetail() {
                   </span>
                 </div>
                 <div className="text-xs text-roomard-700">
-                  {(p.confidence.value * 100).toFixed(0)}% · reinforced {p.reinforcementCount}×
+                  {(((typeof p.confidence === 'number' ? p.confidence : p.confidence?.value) ?? 0) * 100).toFixed(0)}% · reinforced {p.reinforcement_count ?? 0}×
                 </div>
               </li>
             ))}
@@ -156,8 +156,8 @@ function GuestDetail() {
           <ul className="divide-y divide-roomard-100 bg-white rounded-lg shadow">
             {history.data.stays.slice(0, 10).map((s) => (
               <li key={s.id} className="p-3 text-sm">
-                {new Date(s.arrivalAt).toLocaleDateString()} →{' '}
-                {new Date(s.departureAt).toLocaleDateString()} · Room {s.roomNumber ?? '—'} ·{' '}
+                {s.arrival_at ? new Date(s.arrival_at).toLocaleDateString() : '—'} →{' '}
+                {s.departure_at ? new Date(s.departure_at).toLocaleDateString() : '—'} · Room {s.room_number ?? '—'} ·{' '}
                 <span className="text-roomard-700">{s.status}</span>
               </li>
             ))}
@@ -176,8 +176,8 @@ function GuestDetail() {
                   <span>{i.title}</span>
                 </div>
                 <div className="text-xs text-roomard-700">
-                  {new Date(i.occurredAt).toLocaleDateString()}{' '}
-                  {i.resolvedAt ? '· resolved' : '· open'}
+                  {i.occurred_at ? new Date(i.occurred_at).toLocaleDateString() : '—'}{' '}
+                  {i.resolved_at ? '· resolved' : '· open'}
                 </div>
               </li>
             ))}

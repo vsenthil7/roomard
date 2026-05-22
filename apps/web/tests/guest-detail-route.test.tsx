@@ -23,12 +23,12 @@ function routeApi(url: string): unknown {
   if (url === '/v1/guests/g-1') {
     return {
       id: 'g-1',
-      displayName: 'Ada Lovelace',
+      display_name: 'Ada Lovelace',
       email: 'ada@example.com',
-      phoneE164: '+447700900000',
-      homeCountryCode: 'GB',
-      loyaltyTiers: {},
-      attentionFlags: [],
+      phone_e164: '+447700900000',
+      home_country_code: 'GB',
+      loyalty_tiers: {},
+      attention_flags: [],
     };
   }
   if (url === '/v1/guests/g-1/preferences') {
@@ -36,12 +36,12 @@ function routeApi(url: string): unknown {
       items: [
         {
           id: 'pref-1',
-          kind: 'room',
-          polarity: 'like',
+          kind: 'room_position',
+          polarity: 'likes',
           detail: 'High floor, away from lift',
           confidence: { value: 0.92, calibration: 'high' },
-          reinforcementCount: 3,
-          lastReinforcedAt: '2026-05-01T00:00:00.000Z',
+          reinforcement_count: 3,
+          last_reinforced_at: '2026-05-01T00:00:00.000Z',
         },
       ],
     };
@@ -51,11 +51,11 @@ function routeApi(url: string): unknown {
       stays: [
         {
           id: 'stay-1',
-          propertyId: 'p1',
-          arrivalAt: '2026-04-01T14:00:00.000Z',
-          departureAt: '2026-04-03T11:00:00.000Z',
+          property_id: 'p1',
+          arrival_at: '2026-04-01T14:00:00.000Z',
+          departure_at: '2026-04-03T11:00:00.000Z',
           status: 'checked_out',
-          roomNumber: '412',
+          room_number: '412',
         },
       ],
       issues: [],
@@ -65,8 +65,8 @@ function routeApi(url: string): unknown {
     return {
       greeting: 'Welcome back, Ms Lovelace.',
       context: 'Returning guest',
-      preferenceCallouts: ['High floor room prepared'],
-      modelId: 'ernie-4.5-mock',
+      preference_callouts: ['High floor room prepared'],
+      model_id: 'ernie-4.5-mock',
     };
   }
   return {};
