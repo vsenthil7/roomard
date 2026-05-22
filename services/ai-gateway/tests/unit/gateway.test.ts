@@ -66,8 +66,8 @@ describe('AiGateway facade', () => {
     const res = await gw.invoke(input());
     expect(res.modelId).toBe('stub-model');
     expect(stub.invoke).toHaveBeenCalledOnce();
-    // logCall ran with status 'success'.
-    expect(logged).toContain('success');
+    // logCall ran with the real ai_call_status enum value for success (G-47: 'ok', not 'success').
+    expect(logged).toContain('ok');
   });
 
   it('invoke logs failure and rethrows when the provider throws', async () => {
@@ -81,7 +81,8 @@ describe('AiGateway facade', () => {
     const stub: AiProvider = { invoke: vi.fn().mockRejectedValue(new Error('provider down')) };
     const gw = new AiGateway(pool as never, noCaps, stub);
     await expect(gw.invoke(input())).rejects.toThrow('provider down');
-    expect(logged).toContain('failure');
+    // logCall ran with the real ai_call_status enum value for failure (G-47: 'error', not 'failure').
+    expect(logged).toContain('error');
   });
 
   it('enforces the per-minute cap (RateLimitError when count >= cap)', async () => {

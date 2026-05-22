@@ -93,16 +93,18 @@ export async function generateBrief(
   }
 
   // Upsert brief row in 'generating'
+  // G-45: real `briefs` columns are item_count/vip_count/attention_count (NOT
+  // total_arrivals), and there is no items_json column (items live in brief_items).
   const { rows: briefRows } = await client.query<{ id: string }>(
     `INSERT INTO briefs (
-       id, tenant_id, property_id, brief_date, status, vip_count, attention_count, total_arrivals
+       id, tenant_id, property_id, brief_date, status, vip_count, attention_count, item_count
      ) VALUES (
        gen_random_uuid(),
        current_setting('app.tenant_id', false)::uuid,
        $1, $2, 'generating', 0, 0, 0
      )
      ON CONFLICT (tenant_id, property_id, brief_date) DO UPDATE
-       SET status = 'generating', generated_at = NULL, items_json = NULL
+       SET status = 'generating', generated_at = NULL
      RETURNING id`,
     [input.propertyId, input.briefDate],
   );
@@ -113,7 +115,7 @@ export async function generateBrief(
 
   if (arrivals.length === 0) {
     await client.query(
-      `UPDATE briefs SET status = 'ready', total_arrivals = 0, generated_at = now() WHERE id = $1`,
+      `UPDATE briefs SET status = 'ready', item_count = 0, generated_at = now() WHERE id = $1`,
       [briefId],
     );
     return {
@@ -170,30 +172,39 @@ export async function generateBrief(
     if (item.priority === 'vip') vipCount += 1;
     if (item.priority === 'attention') attentionCount += 1;
     await client.query(
+      // G-46: real `brief_items` columns are priority, sort_index, preference_summary,
+      // say_this_suggestion, history_summary, attention_notes, raw_payload. The per-item
+      // display fields the UI needs (name, room, arrival, callouts, issues) are stored in
+      // raw_payload jsonb and projected back out by loadBriefById.
       `INSERT INTO brief_items (
          id, tenant_id, brief_id, guest_id, stay_id, priority,
-         display_name, room_number, arrival_at, say_this_suggestion,
-         preference_callouts, recent_issues, confidence, confidence_calibration, position
+         sort_index, preference_summary, say_this_suggestion,
+         history_summary, attention_notes, raw_payload
        ) VALUES (
          gen_random_uuid(),
          current_setting('app.tenant_id', false)::uuid,
          $1, $2, $3, $4::brief_item_priority,
-         $5, $6, $7, $8,
-         $9::text[], $10::text[], $11, 'ai-brief', $12
+         $5, $6, $7,
+         $8, $9, $10::jsonb
        )`,
       [
         briefId,
         item.guestId,
         arrival.stay_id,
         item.priority,
-        arrival.display_name,
-        arrival.room_number,
-        arrival.arrival_at.toISOString(),
-        item.sayThis,
-        item.callouts,
-        arrival.recent_issues,
-        0.85,
         i,
+        arrival.preferences.join(' \u00b7 '),
+        item.sayThis,
+        arrival.recent_issues.join(' \u00b7 '),
+        item.callouts.join(' \u00b7 '),
+        JSON.stringify({
+          displayName: arrival.display_name,
+          roomNumber: arrival.room_number,
+          arrivalAt: arrival.arrival_at.toISOString(),
+          preferenceCallouts: item.callouts,
+          recentIssues: arrival.recent_issues,
+          confidence: 0.85,
+        }),
       ],
     );
   }
@@ -203,13 +214,12 @@ export async function generateBrief(
        status = 'ready',
        vip_count = $2,
        attention_count = $3,
-       total_arrivals = $4,
+       item_count = $4,
        generation_duration_ms = $5,
-       model_id = $6,
-       prompt_version = $7,
+       prompt_version = $6,
        generated_at = now()
      WHERE id = $1`,
-    [briefId, vipCount, attentionCount, arrivals.length, durationMs, aiResult.modelId, aiResult.promptVersion ?? 'v1'],
+    [briefId, vipCount, attentionCount, arrivals.length, durationMs, aiResult.promptVersion ?? 'v1'],
   );
 
   log.info(
@@ -322,16 +332,16 @@ async function loadExistingStats(
   briefId: string,
 ): Promise<{ totalArrivals: number; vipCount: number; attentionCount: number }> {
   const { rows } = await client.query<{
-    total_arrivals: number;
+    item_count: number;
     vip_count: number;
     attention_count: number;
   }>(
-    `SELECT total_arrivals, vip_count, attention_count FROM briefs WHERE id = $1`,
+    `SELECT item_count, vip_count, attention_count FROM briefs WHERE id = $1`,
     [briefId],
   );
   const r = rows[0];
   return {
-    totalArrivals: r?.total_arrivals ?? 0,
+    totalArrivals: r?.item_count ?? 0,
     vipCount: r?.vip_count ?? 0,
     attentionCount: r?.attention_count ?? 0,
   };
@@ -346,9 +356,45 @@ export async function loadBriefById(
 } | null> {
   const { rows: bRows } = await client.query(`SELECT * FROM briefs WHERE id = $1`, [briefId]);
   if (bRows.length === 0) return null;
-  const { rows: items } = await client.query(
-    `SELECT * FROM brief_items WHERE brief_id = $1 ORDER BY position ASC`,
+  const { rows: rawItems } = await client.query(
+    `SELECT * FROM brief_items WHERE brief_id = $1 ORDER BY sort_index ASC`,
     [briefId],
   );
-  return { brief: bRows[0]!, items };
+
+  // G-46: project the real columns + raw_payload back into the shape the web UI
+  // consumes (display_name, room_number, arrival_at, say_this_suggestion,
+  // preference_callouts[], recent_issues[]). The brief carries total_arrivals as an
+  // alias of the real item_count column.
+  const brief = bRows[0]! as Record<string, unknown>;
+  brief.total_arrivals = brief.item_count ?? 0;
+
+  const items = rawItems.map((r) => {
+    const row = r as Record<string, unknown>;
+    const payload = (row.raw_payload ?? {}) as {
+      displayName?: string;
+      roomNumber?: string | null;
+      arrivalAt?: string;
+      preferenceCallouts?: string[];
+      recentIssues?: string[];
+    };
+    return {
+      id: row.id,
+      priority: row.priority,
+      display_name: payload.displayName ?? 'Guest',
+      room_number: payload.roomNumber ?? null,
+      arrival_at: payload.arrivalAt ?? null,
+      say_this_suggestion: row.say_this_suggestion ?? '',
+      preference_callouts:
+        payload.preferenceCallouts ??
+        (typeof row.preference_summary === 'string' && row.preference_summary
+          ? String(row.preference_summary).split(' \u00b7 ')
+          : []),
+      recent_issues:
+        payload.recentIssues ??
+        (typeof row.history_summary === 'string' && row.history_summary
+          ? String(row.history_summary).split(' \u00b7 ')
+          : []),
+    };
+  });
+  return { brief, items };
 }

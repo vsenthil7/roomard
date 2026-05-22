@@ -82,10 +82,11 @@ export class AiGateway {
     try {
       if (this.cfg.tenantPerMinuteCap > 0) {
         const { rows } = await client.query<{ count: string }>(
+          // G-47: real ai_call_logs timestamp column is `occurred_at`, not `requested_at`.
           `SELECT count(*)::text as count
            FROM ai_call_logs
            WHERE tenant_id = $1::uuid
-             AND requested_at >= now() - interval '60 seconds'`,
+             AND occurred_at >= now() - interval '60 seconds'`,
           [tenantId],
         );
         const minuteCount = Number.parseInt(rows[0]?.count ?? '0', 10);
@@ -98,7 +99,7 @@ export class AiGateway {
           `SELECT COALESCE(sum(input_tokens + output_tokens), 0)::text as tokens
            FROM ai_call_logs
            WHERE tenant_id = $1::uuid
-             AND requested_at >= date_trunc('day', now() at time zone 'UTC')`,
+             AND occurred_at >= date_trunc('day', now() at time zone 'UTC')`,
           [tenantId],
         );
         const tokens = Number.parseInt(rows[0]?.tokens ?? '0', 10);
@@ -119,12 +120,14 @@ export class AiGateway {
     errMessage: string | undefined,
   ): Promise<void> {
     await this.pool.query(
+      // G-47: real ai_call_logs columns are `task` (not capability), `error_code`
+      // (not error_message), and `occurred_at` (not requested_at).
       `INSERT INTO ai_call_logs (
-         id, tenant_id, request_id, capability, model_id, status,
+         id, tenant_id, request_id, task, model_id, status,
          input_hash, output_hash, input_tokens, output_tokens,
-         latency_ms, cost_minor_units, error_message, requested_at
+         latency_ms, cost_minor_units, error_code, occurred_at
        ) VALUES (
-         gen_random_uuid(), $1::uuid, $2, $3, $4, $5,
+         gen_random_uuid(), $1::uuid, $2, $3, $4, $5::ai_call_status,
          $6, $7, $8, $9,
          $10, $11, $12, $13
        )`,
@@ -133,14 +136,16 @@ export class AiGateway {
         input.requestId,
         input.capability,
         result?.modelId ?? 'unknown',
-        status,
+        // G-47: real ai_call_status enum is ok/error/rate_limited/timeout, not success/failure.
+        status === 'success' ? 'ok' : 'error',
         result?.inputHash ?? 'n/a',
         result?.outputHash ?? null,
         result?.inputTokens ?? 0,
         result?.outputTokens ?? 0,
         result?.latencyMs ?? 0,
         result?.costMinorUnits ?? 0,
-        errMessage ?? null,
+        // error_code is text but semantically a code — keep it short.
+        errMessage ? errMessage.slice(0, 200) : null,
         requestedAt.toISOString(),
       ],
     );
