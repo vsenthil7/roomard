@@ -76,29 +76,33 @@ export async function processCardCapture(
   const objectKey = `tenants/${input.tenantId}/captures/${new Date().toISOString().slice(0, 10)}/${input.requestId}${ext}`;
   const { uri, sha256 } = await deps.objectStore.put(objectKey, input.fileBuffer, input.contentType);
 
-  // 3. Insert evidence row in pending state, get id
+  // 3. Insert evidence row in pending state, get id.
+  // G-52: real `evidence` columns are object_ref, occurred_at, status, confidence,
+  // raw_text, metadata (no content_sha256 / captured_at / capture_surface /
+  // source_metadata / model_id / ocr_duration_ms). The sha, surface, notes and
+  // OCR model/timing all live in the metadata jsonb.
   const { rows: evRows } = await client.query<{ id: string }>(
     `INSERT INTO evidence (
        id, tenant_id, property_id, guest_id,
-       kind, object_ref, content_sha256, captured_at, status, confidence,
-       capture_surface, source_metadata
+       kind, object_ref, occurred_at, status, confidence, metadata
      ) VALUES (
        gen_random_uuid(),
        current_setting('app.tenant_id', false)::uuid,
        $1, $2,
-       'card_capture', $3, $4, $5,
-       'pending', 0,
-       $6, $7::jsonb
+       'card_capture', $3, $4, 'pending', 0, $5::jsonb
      )
      RETURNING id`,
     [
       input.meta.propertyId,
       input.meta.guestId ?? null,
       uri,
-      sha256,
       input.meta.metadata.capturedAt,
-      input.meta.metadata.captureSurface,
-      JSON.stringify({ notes: input.meta.notes, geoHint: input.meta.metadata.geoHint }),
+      JSON.stringify({
+        contentSha256: sha256,
+        captureSurface: input.meta.metadata.captureSurface,
+        notes: input.meta.notes,
+        geoHint: input.meta.metadata.geoHint,
+      }),
     ],
   );
   const evidenceId = evRows[0]!.id;
@@ -123,31 +127,36 @@ export async function processCardCapture(
     'ocr result',
   );
 
-  // 5. Update evidence row with raw text + confidence
+  // 5. Update evidence row with raw text + confidence. Real columns only:
+  // raw_text, confidence, metadata (model id + ocr timing go into metadata).
   await client.query(
     `UPDATE evidence SET
        raw_text = $1,
        confidence = $2,
-       model_id = $3,
-       ocr_duration_ms = $4
-     WHERE id = $5`,
-    [ocr.rawText ?? null, overall, aiResult.modelId, aiResult.latencyMs, evidenceId],
+       metadata = metadata || $3::jsonb
+     WHERE id = $4`,
+    [
+      ocr.rawText ?? null,
+      overall,
+      JSON.stringify({ modelId: aiResult.modelId, ocrDurationMs: aiResult.latencyMs }),
+      evidenceId,
+    ],
   );
 
   if (overall < ACCEPT_CONFIDENCE) {
-    // Low confidence → exception queue, evidence stays pending_review
-    await client.query(
-      `UPDATE evidence SET status = 'pending_review' WHERE id = $1`,
-      [evidenceId],
-    );
+    // Low confidence -> exception queue. G-52: evidence_status enum is
+    // pending/processed/failed/redacted (no 'pending_review'); leave it 'pending'
+    // since a human still needs to review it.
     const { rows: exRows } = await client.query<{ id: string }>(
+      // G-52: real exception_kind value is `low_ocr_confidence` (not
+      // low_confidence_ocr) and the real column is `detail` (not description).
       `INSERT INTO exception_queue_items (
          id, tenant_id, property_id, kind, status, severity,
-         title, description, payload, evidence_id, guest_id
+         title, detail, payload, evidence_id, guest_id
        ) VALUES (
          gen_random_uuid(),
          current_setting('app.tenant_id', false)::uuid,
-         $1, 'low_confidence_ocr', 'open', 3,
+         $1, 'low_ocr_confidence', 'open', 3,
          'OCR result below confidence threshold',
          $2, $3::jsonb, $4, $5
        ) RETURNING id`,
@@ -193,13 +202,13 @@ export async function processCardCapture(
          )
          INSERT INTO preferences (
            id, tenant_id, guest_id, kind, polarity, detail,
-           confidence, confidence_calibration, status, source, first_observed_at, last_reinforced_at, reinforcement_count
+           confidence, status, metadata, first_observed_at, last_reinforced_at, reinforcement_count
          )
          SELECT
            gen_random_uuid(),
            current_setting('app.tenant_id', false)::uuid,
            $1, $2::preference_kind, $3::preference_polarity, $5,
-           $4, 'ocr', 'active', 'card_capture', now(), now(), 1
+           $4, 'active', jsonb_build_object('source','card_capture'), now(), now(), 1
          WHERE NOT EXISTS (SELECT 1 FROM upsert)
          RETURNING id`,
         [input.meta.guestId, kind, polarity, f.confidence, f.value],
@@ -207,8 +216,9 @@ export async function processCardCapture(
       const prefId = prefRows[0]?.id;
       if (prefId) {
         await client.query(
-          `INSERT INTO preference_evidence (preference_id, evidence_id, weight)
-           VALUES ($1, $2, $3)
+          // G-52: preference_evidence requires tenant_id (NOT NULL).
+          `INSERT INTO preference_evidence (preference_id, evidence_id, tenant_id, weight)
+           VALUES ($1, $2, current_setting('app.tenant_id', false)::uuid, $3)
            ON CONFLICT (preference_id, evidence_id) DO NOTHING`,
           [prefId, evidenceId, f.confidence],
         );
@@ -223,14 +233,26 @@ export async function processCardCapture(
     }
   }
 
-  await client.query(`UPDATE evidence SET status = 'accepted' WHERE id = $1`, [evidenceId]);
+  // G-52: evidence_status enum has no 'accepted'; the processed terminal state
+  // is 'processed'.
+  await client.query(`UPDATE evidence SET status = 'processed' WHERE id = $1`, [evidenceId]);
 
-  // Also insert card_captures sub-record
+  // Also insert the card_captures sub-record. G-52: real columns are
+  // evidence_id, tenant_id, image_object_ref, extracted_fields,
+  // handwriting_detected (+ optional ocr_language) — not raw_text/fields_json.
   await client.query(
-    `INSERT INTO card_captures (evidence_id, raw_text, fields_json, language)
-     VALUES ($1, $2, $3::jsonb, $4)
-     ON CONFLICT (evidence_id) DO UPDATE SET raw_text = EXCLUDED.raw_text, fields_json = EXCLUDED.fields_json`,
-    [evidenceId, ocr.rawText ?? null, JSON.stringify(fields), ocr.language ?? null],
+    `INSERT INTO card_captures (
+       evidence_id, tenant_id, image_object_ref, extracted_fields,
+       handwriting_detected, ocr_language
+     )
+     VALUES (
+       $1, current_setting('app.tenant_id', false)::uuid, $2, $3::jsonb, $4, $5
+     )
+     ON CONFLICT (evidence_id) DO UPDATE SET
+       extracted_fields = EXCLUDED.extracted_fields,
+       handwriting_detected = EXCLUDED.handwriting_detected,
+       ocr_language = EXCLUDED.ocr_language`,
+    [evidenceId, uri, JSON.stringify(fields), true, ocr.language ?? null],
   );
 
   return {
@@ -249,30 +271,41 @@ function aggregateConfidence(fields: OcrField[]): number {
   return Math.min(...fields.map((f) => f.confidence));
 }
 
+// G-52: classifyKind/classifyPolarity must return values that exist in the real
+// preference_kind / preference_polarity enums, or the ::enum casts in the INSERT
+// throw 22P02. Real preference_kind: pillow, temperature, dietary, allergy,
+// room_position, room_type, view, bedding, amenity, service, food_dislike,
+// food_like, language, other. Real preference_polarity: likes, dislikes,
+// requires, avoids, noted.
 function classifyKind(name: string): string {
   const n = name.toLowerCase();
   if (n.includes('pillow')) return 'pillow';
   if (n.includes('allergy') || n.includes('allergen')) return 'allergy';
   if (n.includes('temperature')) return 'temperature';
-  if (n.includes('beverage') || n.includes('drink') || n.includes('tea') || n.includes('coffee'))
-    return 'beverage';
-  if (n.includes('food')) return 'food';
-  if (n.includes('room')) return 'room';
-  if (n.includes('activity')) return 'activity';
-  if (n.includes('celebration') || n.includes('birthday') || n.includes('anniversary'))
-    return 'celebration';
-  if (n.includes('accessibility')) return 'accessibility';
-  if (n.includes('family') || n.includes('child')) return 'family';
-  if (n.includes('pet')) return 'pet';
+  if (n.includes('diet') || n.includes('vegan') || n.includes('vegetarian') || n.includes('halal') || n.includes('kosher'))
+    return 'dietary';
+  if (n.includes('beverage') || n.includes('drink') || n.includes('tea') || n.includes('coffee') || n.includes('food') || n.includes('meal'))
+    return n.includes('dislike') || n.includes('avoid') ? 'food_dislike' : 'food_like';
+  if (n.includes('view')) return 'view';
+  if (n.includes('bed')) return 'bedding';
+  if (n.includes('room') && (n.includes('type') || n.includes('suite'))) return 'room_type';
+  if (n.includes('room') || n.includes('floor') || n.includes('quiet') || n.includes('corridor'))
+    return 'room_position';
+  if (n.includes('amenity') || n.includes('espresso') || n.includes('machine')) return 'amenity';
+  if (n.includes('service') || n.includes('turndown') || n.includes('housekeep')) return 'service';
+  if (n.includes('language') || n.includes('english') || n.includes('danish') || n.includes('speak'))
+    return 'language';
   return 'other';
 }
 
-function classifyPolarity(name: string): 'like' | 'dislike' | 'allergy' | 'requirement' {
+function classifyPolarity(name: string): 'likes' | 'dislikes' | 'requires' | 'avoids' | 'noted' {
   const n = name.toLowerCase();
-  if (n.includes('allergy')) return 'allergy';
-  if (n.includes('require') || n.includes('must') || n.includes('need')) return 'requirement';
-  if (n.includes('dislike') || n.includes('avoid')) return 'dislike';
-  return 'like';
+  if (n.includes('allergy') || n.includes('avoid')) return 'avoids';
+  if (n.includes('require') || n.includes('must') || n.includes('need')) return 'requires';
+  if (n.includes('dislike')) return 'dislikes';
+  if (n.includes('like') || n.includes('prefer') || n.includes('favourite') || n.includes('favorite'))
+    return 'likes';
+  return 'noted';
 }
 
 function guessExtension(contentType: string): string {

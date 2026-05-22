@@ -63,6 +63,7 @@ demovideo/.runner/playwright-report/
 demovideo/.runner/integration-result.json
 demovideo/.runner/err.mjs
 demovideo/.runner/shot.mjs
+demovideo/.runner/clips/
 demovideo/results/creation/latest.txt
 demovideo/verification-b/frames/
 demo/_backup/

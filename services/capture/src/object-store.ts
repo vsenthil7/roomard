@@ -15,16 +15,30 @@ export interface ObjectStoreConfig {
   secretAccessKey: string;
   bucket: string;
   forcePathStyle: boolean;
+  /** Send ServerSideEncryption: AES256 on put. Off for dev MinIO (no KMS); on in prod. */
+  serverSideEncryption: boolean;
 }
 
 export function objectStoreConfigFromEnv(): ObjectStoreConfig {
+  // G-50: docker-compose (and the deployment contract) provide the object-store
+  // config under the S3_* names; earlier code only read OBJECT_STORE_* and so
+  // silently fell back to http://localhost:9000 with the wrong credentials,
+  // which inside the container is nothing — every capture failed with
+  // ECONNREFUSED -> 502 “object store unavailable”. Prefer S3_* (what the infra
+  // sets), keep OBJECT_STORE_* as an accepted alias, then the dev default.
+  const env = process.env;
   return {
-    endpoint: process.env.OBJECT_STORE_ENDPOINT ?? 'http://localhost:9000',
-    region: process.env.OBJECT_STORE_REGION ?? 'us-east-1',
-    accessKeyId: process.env.OBJECT_STORE_ACCESS_KEY ?? 'roomard',
-    secretAccessKey: process.env.OBJECT_STORE_SECRET_KEY ?? 'roomard-dev-secret',
-    bucket: process.env.OBJECT_STORE_BUCKET ?? 'roomard-evidence',
-    forcePathStyle: process.env.OBJECT_STORE_FORCE_PATH_STYLE !== 'false',
+    endpoint: env.S3_ENDPOINT ?? env.OBJECT_STORE_ENDPOINT ?? 'http://localhost:9000',
+    region: env.S3_REGION ?? env.OBJECT_STORE_REGION ?? 'us-east-1',
+    accessKeyId: env.S3_ACCESS_KEY ?? env.OBJECT_STORE_ACCESS_KEY ?? 'roomard',
+    secretAccessKey: env.S3_SECRET_KEY ?? env.OBJECT_STORE_SECRET_KEY ?? 'roomard-dev-secret',
+    bucket: env.S3_BUCKET_EVIDENCE ?? env.OBJECT_STORE_BUCKET ?? 'roomard-evidence',
+    forcePathStyle:
+      (env.S3_FORCE_PATH_STYLE ?? env.OBJECT_STORE_FORCE_PATH_STYLE) !== 'false',
+    // G-51: dev MinIO has no KMS, so SSE-S3 (AES256) puts fail with 501
+    // NotImplemented. Default OFF; real deployments set S3_SSE=true (BOS/S3
+    // honour AES256 natively).
+    serverSideEncryption: (env.S3_SSE ?? env.OBJECT_STORE_SSE) === 'true',
   };
 }
 
@@ -51,7 +65,7 @@ export class ObjectStore {
           Body: body,
           ContentType: contentType,
           Metadata: { sha256 },
-          ServerSideEncryption: 'AES256',
+          ...(this.cfg.serverSideEncryption ? { ServerSideEncryption: 'AES256' as const } : {}),
         }),
       );
     } catch (err) {

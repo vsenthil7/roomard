@@ -55,7 +55,7 @@ describe('captures.new route', () => {
   it('renders the capture form with property + guest selects populated', async () => {
     apiFetchMock.mockImplementation((url: string) => {
       if (url === '/v1/properties') return Promise.resolve({ items: [{ id: 'p1', name: 'Demo Hotel' }] });
-      if (url === '/v1/guests') return Promise.resolve({ items: [{ id: 'g1', displayName: 'Ada Lovelace' }] });
+      if (url === '/v1/guests') return Promise.resolve({ items: [{ id: 'g1', display_name: 'Ada Lovelace' }] });
       return Promise.resolve({});
     });
     await renderRouteComponent(CaptureRoute, '/captures/new');
@@ -72,12 +72,13 @@ describe('captures.new route', () => {
       if (url === '/v1/properties') return Promise.resolve({ items: [{ id: 'p1', name: 'Demo Hotel' }] });
       if (url === '/v1/guests') return Promise.resolve({ items: [] });
       if (url === '/v1/captures') {
+        // Snake_case to match the real API contract (G-53).
         return Promise.resolve({
-          evidenceId: 'ev1',
+          evidence_id: 'ev1',
           status: 'accepted',
           confidence: { value: 0.91 },
-          extractedPreferences: [
-            { kind: 'room', polarity: 'like', detail: 'High floor', confidence: 0.9 },
+          extracted_preferences: [
+            { kind: 'room_position', polarity: 'likes', detail: 'High floor', confidence: 0.9 },
           ],
         });
       }

@@ -31,11 +31,11 @@ interface CaptureForm {
 }
 
 interface CaptureResponse {
-  evidenceId: string;
+  evidence_id: string;
   status: 'accepted' | 'pending_review';
   confidence: { value: number };
-  extractedPreferences: Array<{ kind: string; polarity: string; detail: string; confidence: number }>;
-  exceptionQueueItemId?: string;
+  extracted_preferences: Array<{ kind: string; polarity: string; detail: string; confidence: number }>;
+  exception_queue_item_id?: string;
 }
 
 function CaptureNew() {
@@ -47,7 +47,7 @@ function CaptureNew() {
   });
   const guests = useQuery({
     queryKey: ['guests-min'],
-    queryFn: () => apiFetch<{ items: Array<{ id: string; displayName: string }> }>('/v1/guests'),
+    queryFn: () => apiFetch<{ items: Array<{ id: string; display_name: string }> }>('/v1/guests'),
   });
 
   const [file, setFile] = useState<File | null>(null);
@@ -125,11 +125,11 @@ function CaptureNew() {
               : '◇ Saved — needs review'}
           </h2>
           <p className="text-sm text-roomard-700 mt-1">
-            Confidence: {(result.confidence.value * 100).toFixed(0)}%
+            Confidence: {((result.confidence?.value ?? 0) * 100).toFixed(0)}%
           </p>
-          {result.extractedPreferences.length > 0 && (
+          {(result.extracted_preferences ?? []).length > 0 && (
             <ul className="mt-2 text-sm list-disc pl-5">
-              {result.extractedPreferences.map((p, i) => (
+              {(result.extracted_preferences ?? []).map((p, i) => (
                 <li key={i}>
                   <span className="font-medium">{p.detail}</span>{' '}
                   <span className="text-roomard-700">
@@ -139,7 +139,7 @@ function CaptureNew() {
               ))}
             </ul>
           )}
-          {result.exceptionQueueItemId && (
+          {result.exception_queue_item_id && (
             <p className="text-xs text-roomard-700 mt-2">
               Queued to exception list for manual review.
             </p>
@@ -182,7 +182,7 @@ function CaptureNew() {
             <select id="guest" className="form-input" {...register('guestId')} data-testid="capture-guest">
               <option value="">— not linked —</option>
               {guests.data?.items.map((g) => (
-                <option key={g.id} value={g.id}>{g.displayName}</option>
+                <option key={g.id} value={g.id}>{g.display_name}</option>
               ))}
             </select>
           </div>

@@ -34,6 +34,7 @@ const cfg = {
   secretAccessKey: 's',
   bucket: 'test-bucket',
   forcePathStyle: true,
+  serverSideEncryption: false,
 };
 
 describe('objectStoreConfigFromEnv', () => {
@@ -41,7 +42,7 @@ describe('objectStoreConfigFromEnv', () => {
   beforeEach(() => {
     process.env = { ...orig };
     for (const k of Object.keys(process.env)) {
-      if (k.startsWith('OBJECT_STORE_')) delete process.env[k];
+      if (k.startsWith('OBJECT_STORE_') || k.startsWith('S3_')) delete process.env[k];
     }
   });
 
@@ -50,9 +51,11 @@ describe('objectStoreConfigFromEnv', () => {
     expect(c.endpoint).toBe('http://localhost:9000');
     expect(c.bucket).toBe('roomard-evidence');
     expect(c.forcePathStyle).toBe(true);
+    // G-51: SSE defaults OFF (dev MinIO has no KMS).
+    expect(c.serverSideEncryption).toBe(false);
   });
 
-  it('reads overrides from the environment', () => {
+  it('reads overrides from the environment (OBJECT_STORE_* alias)', () => {
     process.env.OBJECT_STORE_ENDPOINT = 'https://bos.example.com';
     process.env.OBJECT_STORE_BUCKET = 'prod-evidence';
     process.env.OBJECT_STORE_FORCE_PATH_STYLE = 'false';
@@ -60,6 +63,20 @@ describe('objectStoreConfigFromEnv', () => {
     expect(c.endpoint).toBe('https://bos.example.com');
     expect(c.bucket).toBe('prod-evidence');
     expect(c.forcePathStyle).toBe(false);
+  });
+
+  it('G-50: reads the S3_* names docker-compose actually provides', () => {
+    process.env.S3_ENDPOINT = 'http://minio:9000';
+    process.env.S3_ACCESS_KEY = 'roomard_minio';
+    process.env.S3_SECRET_KEY = 'roomard_minio_dev_pwd';
+    process.env.S3_BUCKET_EVIDENCE = 'roomard-evidence';
+    process.env.S3_SSE = 'true';
+    const c = objectStoreConfigFromEnv();
+    expect(c.endpoint).toBe('http://minio:9000');
+    expect(c.accessKeyId).toBe('roomard_minio');
+    expect(c.secretAccessKey).toBe('roomard_minio_dev_pwd');
+    expect(c.bucket).toBe('roomard-evidence');
+    expect(c.serverSideEncryption).toBe(true);
   });
 });
 
@@ -74,6 +91,22 @@ describe('ObjectStore (S3 SDK mocked)', () => {
     expect(uri).toBe('s3://test-bucket/evidence/abc.jpg');
     expect(sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('put omits ServerSideEncryption by default (G-51: dev MinIO has no KMS)', async () => {
+    sendMock.mockResolvedValueOnce({});
+    const store = new ObjectStore(cfg);
+    await store.put('k', Buffer.from('x'), 'image/jpeg');
+    const cmd = sendMock.mock.calls[0]![0] as { input: Record<string, unknown> };
+    expect(cmd.input.ServerSideEncryption).toBeUndefined();
+  });
+
+  it('put sends ServerSideEncryption when enabled', async () => {
+    sendMock.mockResolvedValueOnce({});
+    const store = new ObjectStore({ ...cfg, serverSideEncryption: true });
+    await store.put('k', Buffer.from('x'), 'image/jpeg');
+    const cmd = sendMock.mock.calls[0]![0] as { input: Record<string, unknown> };
+    expect(cmd.input.ServerSideEncryption).toBe('AES256');
   });
 
   it('put wraps an SDK failure in IntegrationError', async () => {

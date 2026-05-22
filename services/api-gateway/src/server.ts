@@ -94,16 +94,20 @@ export function buildServer(deps: BuildDeps) {
     },
   });
 
-  // G-28 fix — the gateway forwards raw body bytes to upstreams, so we register
-  // an application/json content-type parser that buffers the body untouched.
-  // Without this, Fastify 5's catch-all `app.route({ url: '/v1/*' })` registrations
-  // have no parser for application/json content-types and Fastify throws
-  // FST_ERR_CTP_INVALID_MEDIA_TYPE (statusCode 415) before reaching the handler.
-  // The error handler below ALSO forwards err.statusCode for FastifyError instances
-  // so the 415 (or any other Fastify-thrown status) propagates rather than being
-  // masked as a generic 500.
+  // G-28 / G-49 fix — the gateway forwards raw body bytes to upstreams and never
+  // interprets them itself, so we buffer EVERY content-type untouched. Without a
+  // parser for a given content-type, Fastify 5's catch-all `/v1/*` routes throw
+  // FST_ERR_CTP_INVALID_MEDIA_TYPE (415) before the proxy handler runs.
+  //
+  // G-28 originally registered only `application/json`, which meant multipart
+  // uploads (the card-capture POST /v1/captures the SPA sends as
+  // multipart/form-data) were rejected with 415 at the edge and never reached
+  // capture-svc. A single catch-all parser fixes the whole class: the gateway is
+  // a byte-forwarding proxy, so buffering any body verbatim is exactly right.
+  // The error handler below ALSO forwards err.statusCode for FastifyError
+  // instances so any genuinely-unparseable request still propagates a real 4xx.
   app.addContentTypeParser(
-    'application/json',
+    '*',
     { parseAs: 'buffer' },
     (_req, body, done) => {
       done(null, body);
