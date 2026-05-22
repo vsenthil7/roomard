@@ -68,7 +68,9 @@ test('clip-06-exception', async ({ page, playwright }) => {
       headline: 'The item has moved out of the open queue into Resolved.',
       detail: 'The queue stays clean; resolved items remain on record.',
     });
-    await pause(page, 1_200);
+    await pause(page, 2_200);
+    await clearBanner(page);
+    await pause(page, 300);
     await highlightAndClick(page, 'tab-resolved', 700);
     await pause(page, 2_000);
   }
