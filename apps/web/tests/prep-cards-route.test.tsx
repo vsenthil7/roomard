@@ -20,23 +20,23 @@ import { renderRouteComponent } from './helpers/renderRoute';
 
 const readyCard = {
   id: 'pc-1',
-  stayId: 's1',
-  guestId: 'g1',
-  displayName: 'Ada Lovelace',
-  roomNumber: '412',
-  arrivalAt: '2026-05-21T14:00:00.000Z',
-  prepItems: ['High floor room', 'Extra pillows'],
-  attentionFlags: ['vip'],
-  warmNote: 'Welcome back, Ms Lovelace.',
+  stay_id: 's1',
+  guest_id: 'g1',
+  display_name: 'Ada Lovelace',
+  room_number: '412',
+  arrival_at: '2026-05-21T14:00:00.000Z',
+  prep_items: ['High floor room', 'Extra pillows'],
+  attention_flags: ['vip'],
+  warm_note: 'Welcome back, Ms Lovelace.',
   status: 'ready',
-  completedAt: null,
+  completed_at: null,
 };
 const completedCard = {
   ...readyCard,
   id: 'pc-2',
-  displayName: 'Alan Turing',
+  display_name: 'Alan Turing',
   status: 'completed',
-  completedAt: '2026-05-21T09:00:00.000Z',
+  completed_at: '2026-05-21T09:00:00.000Z',
 };
 
 describe('prep-cards route', () => {

@@ -23,16 +23,16 @@ export const Route = createRoute({
 
 interface PrepCard {
   id: string;
-  stayId: string;
-  guestId: string;
-  displayName: string;
-  roomNumber: string | null;
-  arrivalAt: string;
-  prepItems: string[];
-  attentionFlags: string[];
-  warmNote: string | null;
+  stay_id: string;
+  guest_id: string;
+  display_name: string;
+  room_number: string | null;
+  arrival_at: string;
+  prep_items: string[];
+  attention_flags: string[];
+  warm_note: string | null;
   status: 'pending' | 'ready' | 'completed' | 'skipped';
-  completedAt: string | null;
+  completed_at: string | null;
 }
 
 function todayIso(): string {
@@ -139,7 +139,7 @@ function PrepCardsView(): JSX.Element {
                 onComplete={(notes) =>
                   completeMutation.mutate({ cardId: c.id, notes })
                 }
-                onViewGuest={() => void navigate({ to: '/guests/$id', params: { id: c.guestId } })}
+                onViewGuest={() => void navigate({ to: '/guests/$id', params: { id: c.guest_id } })}
                 disabled={completeMutation.isPending}
               />
             ))}
@@ -156,11 +156,11 @@ function PrepCardsView(): JSX.Element {
             {completed.map((c) => (
               <li key={c.id} className="card flex justify-between items-baseline">
                 <div>
-                  <div className="font-medium line-through">{c.displayName}</div>
+                  <div className="font-medium line-through">{c.display_name}</div>
                   <div className="text-xs text-roomard-700">
-                    Room {c.roomNumber ?? '—'} · Completed{' '}
-                    {c.completedAt
-                      ? new Date(c.completedAt).toLocaleTimeString([], {
+                    Room {c.room_number ?? '—'} · Completed{' '}
+                    {c.completed_at
+                      ? new Date(c.completed_at).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
                         })
@@ -195,15 +195,17 @@ function PrepCardItem({
     <li className="card" data-testid="prep-card-item">
       <div className="flex items-baseline justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold">{card.displayName}</div>
+          <div className="text-lg font-semibold">{card.display_name}</div>
           <div className="text-sm text-roomard-700">
-            Room {card.roomNumber ?? '—'} · Arrives{' '}
-            {new Date(card.arrivalAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            Room {card.room_number ?? '—'} · Arrives{' '}
+            {card.arrival_at
+              ? new Date(card.arrival_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '—'}
           </div>
         </div>
-        {card.attentionFlags.length > 0 && (
+        {(card.attention_flags ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {card.attentionFlags.map((f) => (
+            {(card.attention_flags ?? []).map((f) => (
               <span
                 key={f}
                 className="text-xs uppercase tracking-wide bg-amber-100 text-amber-900 rounded px-2 py-1"
@@ -215,13 +217,13 @@ function PrepCardItem({
         )}
       </div>
 
-      {card.warmNote && (
-        <p className="mt-3 text-base italic text-roomard-900">&ldquo;{card.warmNote}&rdquo;</p>
+      {card.warm_note && (
+        <p className="mt-3 text-base italic text-roomard-900">&ldquo;{card.warm_note}&rdquo;</p>
       )}
 
-      {card.prepItems.length > 0 && (
+      {(card.prep_items ?? []).length > 0 && (
         <ul className="mt-3 space-y-1" data-testid="prep-items">
-          {card.prepItems.map((item, idx) => (
+          {(card.prep_items ?? []).map((item, idx) => (
             <li
               key={idx}
               className="text-sm text-roomard-900 before:content-['•'] before:mr-2 before:text-roomard-500"
