@@ -5,7 +5,7 @@
  * See docs/TRACEABILITY.md for why this class of test matters (G-28..G-32).
  */
 import type { RoomardPool } from '@roomard/db';
-import { createFakePool, mintTestToken, newUuid } from '@roomard/test-utils';
+import { createFakePool, mintTestToken, newUuid, TEST_TENANT_ID } from '@roomard/test-utils';
 import type { FastifyInstance } from 'fastify';
 import { describe, it, expect, beforeAll } from 'vitest';
 
@@ -186,6 +186,91 @@ describe('exception-svc server', () => {
       headers: { authorization: `Bearer ${conciergeToken}` },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('resolving a low_ocr_confidence item with a guest persists the held preferences', async () => {
+    // The capture pipeline holds OCR fields back when overall confidence < 0.75.
+    // Resolving the exception means a human confirmed the reading, so those
+    // fields must now be written to the guest. Assert the persist SQL fires.
+    const guestId = '00000000-0000-4000-8000-0000000000c1';
+    const evidenceId = '00000000-0000-4000-8000-0000000000c2';
+    const persistPool = createFakePool([
+      {
+        // UPDATE ... RETURNING * — a low-OCR item linked to a guest, with held fields.
+        match: 'update exception_queue_items',
+        rows: [
+          {
+            id: '00000000-0000-4000-8000-0000000000cc',
+            tenant_id: TEST_TENANT_ID,
+            kind: 'low_ocr_confidence',
+            status: 'resolved',
+            severity: 3,
+            guest_id: guestId,
+            evidence_id: evidenceId,
+            payload: {
+              overall: 0.62,
+              fields: [
+                { name: 'preference.room.pillow', value: 'firm pillows, two extra', confidence: 0.93 },
+                { name: 'preference.dietary.allergy', value: 'no shellfish', confidence: 0.9 },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        // The preferences upsert returns a new pref id so the evidence link runs.
+        match: 'insert into preferences',
+        rows: [{ id: '00000000-0000-4000-8000-0000000000d1' }],
+      },
+    ]);
+    const persistApp = buildServer({ pool: persistPool as unknown as RoomardPool });
+    await persistApp.ready();
+    const res = await persistApp.inject({
+      method: 'PATCH',
+      url: '/v1/exceptions/00000000-0000-4000-8000-0000000000cc',
+      headers: { authorization: `Bearer ${mgrToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ status: 'resolved', resolutionNotes: 'confirmed at desk' }),
+    });
+    expect(res.statusCode).toBe(200);
+    const sql = persistPool.queries.map((q) => q.toLowerCase());
+    // Two held fields => the preferences upsert ran, and the evidence link ran.
+    expect(sql.some((q) => q.includes('insert into preferences'))).toBe(true);
+    expect(sql.some((q) => q.includes('insert into preference_evidence'))).toBe(true);
+    await persistApp.close();
+  });
+
+  it('resolving a non-OCR exception does NOT touch preferences', async () => {
+    // Guard: only low_ocr_confidence items persist prefs on resolve. A different
+    // kind must never write to preferences.
+    const otherPool = createFakePool([
+      {
+        match: 'update exception_queue_items',
+        rows: [
+          {
+            id: '00000000-0000-4000-8000-0000000000ce',
+            tenant_id: TEST_TENANT_ID,
+            kind: 'review_link_ambiguous',
+            status: 'resolved',
+            severity: 3,
+            guest_id: '00000000-0000-4000-8000-0000000000c9',
+            evidence_id: null,
+            payload: { something: 'else' },
+          },
+        ],
+      },
+    ]);
+    const otherApp = buildServer({ pool: otherPool as unknown as RoomardPool });
+    await otherApp.ready();
+    const res = await otherApp.inject({
+      method: 'PATCH',
+      url: '/v1/exceptions/00000000-0000-4000-8000-0000000000ce',
+      headers: { authorization: `Bearer ${mgrToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ status: 'resolved' }),
+    });
+    expect(res.statusCode).toBe(200);
+    const sql = otherPool.queries.map((q) => q.toLowerCase());
+    expect(sql.some((q) => q.includes('insert into preferences'))).toBe(false);
+    await otherApp.close();
   });
 
   it('unknown route returns 404 canonical envelope', async () => {

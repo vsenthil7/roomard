@@ -11,6 +11,8 @@ import {
   ExceptionKindSchema,
   ExceptionStatusSchema,
   UuidSchema,
+  classifyPreferenceKind,
+  classifyPreferencePolarity,
 } from '@roomard/schemas';
 import {
   applyFramework,
@@ -149,7 +151,86 @@ export class ExceptionRepo {
       params,
     );
     if (rows.length === 0) throw new NotFoundError('exception not found');
-    return rows[0];
+    const updated = rows[0] as {
+      id: string;
+      kind: string;
+      status: string;
+      guest_id: string | null;
+      evidence_id: string | null;
+      payload: { fields?: Array<{ name: string; value: string; confidence: number }> } | null;
+    };
+
+    // When a low-confidence OCR exception is RESOLVED, the human has confirmed
+    // the reading — so the preferences that the capture pipeline deliberately
+    // held back (because overall confidence < 0.75) are now persisted to the
+    // guest. This is the other half of the capture flow: low-confidence cards
+    // are not silently trusted, but once a person confirms them the data does
+    // land on the guest. Without this, a confirmed card's data would be lost.
+    if (
+      input.status === 'resolved' &&
+      updated.kind === 'low_ocr_confidence' &&
+      updated.guest_id &&
+      Array.isArray(updated.payload?.fields)
+    ) {
+      await persistConfirmedPreferences(
+        client,
+        updated.guest_id,
+        updated.evidence_id,
+        updated.payload!.fields!,
+      );
+    }
+
+    return updated;
+  }
+}
+
+/**
+ * Persist OCR fields confirmed via exception resolution onto the guest. Mirrors
+ * the capture pipeline's high-confidence upsert exactly (same preferences +
+ * preference_evidence shape, same classifiers from @roomard/schemas) so the two
+ * persist paths cannot drift. Idempotent: re-resolving will not duplicate an
+ * existing active preference.
+ */
+async function persistConfirmedPreferences(
+  client: PoolClient,
+  guestId: string,
+  evidenceId: string | null,
+  fields: Array<{ name: string; value: string; confidence: number }>,
+): Promise<void> {
+  for (const f of fields) {
+    const kind = classifyPreferenceKind(f.name);
+    const polarity = classifyPreferencePolarity(f.name);
+    const { rows: prefRows } = await client.query<{ id: string }>(
+      `WITH upsert AS (
+         UPDATE preferences SET
+           confidence = GREATEST(confidence, $4),
+           reinforcement_count = reinforcement_count + 1,
+           last_reinforced_at = now()
+         WHERE guest_id = $1 AND kind = $2::preference_kind AND lower(detail) = lower($5) AND status = 'active'
+         RETURNING id
+       )
+       INSERT INTO preferences (
+         id, tenant_id, guest_id, kind, polarity, detail,
+         confidence, status, metadata, first_observed_at, last_reinforced_at, reinforcement_count
+       )
+       SELECT
+         gen_random_uuid(),
+         current_setting('app.tenant_id', false)::uuid,
+         $1, $2::preference_kind, $3::preference_polarity, $5,
+         $4, 'active', jsonb_build_object('source','exception_resolution'), now(), now(), 1
+       WHERE NOT EXISTS (SELECT 1 FROM upsert)
+       RETURNING id`,
+      [guestId, kind, polarity, f.confidence, f.value],
+    );
+    const prefId = prefRows[0]?.id;
+    if (prefId && evidenceId) {
+      await client.query(
+        `INSERT INTO preference_evidence (preference_id, evidence_id, tenant_id, weight)
+         VALUES ($1, $2, current_setting('app.tenant_id', false)::uuid, $3)
+         ON CONFLICT (preference_id, evidence_id) DO NOTHING`,
+        [prefId, evidenceId, f.confidence],
+      );
+    }
   }
 }
 
