@@ -291,6 +291,97 @@ export async function showStepBanner(
   );
 }
 
+/**
+ * STEP 2 — the user-journey STORYBOARD beat. Its OWN full-screen beat, shown
+ * BEFORE the live run (not fused with it). A click-through filmstrip of the
+ * flow: for each screen, blank -> filled -> action, and crucially what that
+ * screen PRODUCES and how that output feeds the next screen (data lineage made
+ * explicit). This is the piece the buyer said was missing: the viewer sees the
+ * whole path on one card, with the API call + result under each step, before
+ * watching the product do it for real.
+ *
+ *   title:  e.g. "SCREEN FLOW \u00b7 ONBOARD A NEW HOTEL"
+ *   steps:  ordered screens. Each:
+ *     screen:   screen name, e.g. "Login", "Property", "Guest"
+ *     blank:    what the screen looks like empty, e.g. "[empty form]"
+ *     filled:   what gets entered, e.g. "name / code / city"
+ *     action:   the button/verb, e.g. "Create"
+ *     produces: the lineage line, e.g. "POST /v1/properties => property exists"
+ *   outcome: the closing line, e.g. "hotel is live — shows the property + guest + brief just created"
+ */
+export async function showStoryboard(
+  page: Page,
+  opts: {
+    title: string;
+    steps: Array<{ screen: string; blank: string; filled: string; action: string; produces: string }>;
+    outcome?: string;
+    durationMs: number;
+  },
+): Promise<void> {
+  await page.evaluate(
+    ({ title, steps, outcome, bg, bgCard, white, textPrimary, textSecondary, blue, green, teal, amber }) => {
+      const existing = document.getElementById('roomard-overlay');
+      if (existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'roomard-overlay';
+      overlay.style.cssText = `
+        position: fixed; inset: 0; z-index: 999999;
+        background: ${bg}; color: ${white};
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        display: flex; flex-direction: column; justify-content: center; padding: 56px 64px;
+      `;
+      const stepCards = steps
+        .map((s, i) => {
+          const arrow =
+            i < steps.length - 1
+              ? `<div style="display:flex;align-items:center;color:${teal};font-size:28px;padding:0 4px;">\u2192</div>`
+              : '';
+          return `
+            <div style="display:flex;align-items:stretch;">
+              <div style="flex:1;background:${bgCard};border-radius:10px;padding:14px 16px;border-top:4px solid ${blue};min-width:0;">
+                <div style="font-size:13px;letter-spacing:1.5px;color:${blue};font-weight:700;margin-bottom:10px;">${s.screen}</div>
+                <div style="font-size:15px;line-height:1.7;color:${textSecondary};">
+                  <div><span style="color:${textPrimary};">blank</span> &nbsp;${s.blank}</div>
+                  <div><span style="color:${textPrimary};">filled</span> &nbsp;${s.filled}</div>
+                  <div><span style="color:${amber};font-weight:600;">${s.action}</span></div>
+                </div>
+                <div style="margin-top:10px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.15);font-family:'SF Mono',Consolas,monospace;font-size:12px;color:${green};line-height:1.4;">
+                  \u21b3 ${s.produces}
+                </div>
+              </div>
+              ${arrow}
+            </div>`;
+        })
+        .join('');
+      overlay.innerHTML = `
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+          <div style="width:24px;height:6px;background:${teal};border-radius:2px;"></div>
+          <div style="font-size:14px;color:${teal};letter-spacing:2px;font-weight:600;">${title}</div>
+        </div>
+        <div style="font-size:13px;color:${textSecondary};margin-bottom:28px;">Screen flow \u2014 what each screen produces and how it feeds the next (data lineage)</div>
+        <div style="display:flex;gap:6px;align-items:stretch;">${stepCards}</div>
+        ${outcome ? `<div style="margin-top:28px;font-size:18px;color:${textPrimary};display:flex;align-items:center;gap:12px;"><span style="color:${green};font-size:22px;">\u2713</span>${outcome}</div>` : ''}
+      `;
+      document.body.appendChild(overlay);
+    },
+    {
+      title: opts.title,
+      steps: opts.steps,
+      outcome: opts.outcome ?? '',
+      bg: BG,
+      bgCard: BG_CARD,
+      white: WHITE,
+      textPrimary: TEXT_PRIMARY,
+      textSecondary: TEXT_SECONDARY,
+      blue: ACCENT_BLUE,
+      green: ACCENT_GREEN,
+      teal: ACCENT_TEAL,
+      amber: ACCENT_AMBER,
+    },
+  );
+  await page.waitForTimeout(opts.durationMs);
+}
+
 /** Remove just the step banner (leave verdict/pill in place). */
 export async function clearBanner(page: Page): Promise<void> {
   await page.evaluate(() => document.getElementById('roomard-banner')?.remove());

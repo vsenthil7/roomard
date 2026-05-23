@@ -19,6 +19,7 @@ export {
   showCaptionPill,
   showVerdict,
   showStepBanner,
+  showStoryboard,
   clearBanner,
   clearOverlay,
 } from './caption-overlay';

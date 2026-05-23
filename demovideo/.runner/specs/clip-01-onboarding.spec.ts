@@ -15,7 +15,7 @@
  */
 import { test } from '@playwright/test';
 import {
-  showSceneCard, showStepBanner, showVerdict, clearBanner, clearOverlay,
+  showSceneCard, showStepBanner, showStoryboard, showVerdict, clearBanner, clearOverlay,
   signInAndGetToken, liveCall, typeInto, highlightAndClick, pause,
   WEB_BASE,
 } from './clip-helpers';
@@ -41,9 +41,50 @@ test('clip-01-onboarding', async ({ page, playwright }) => {
   });
   await clearOverlay(page);
 
+  // ---- BEAT 2: SCREEN FLOW STORYBOARD (its own beat, BEFORE the live run) ---
+  // The viewer sees the whole path on one card first: each screen blank ->
+  // filled -> action, and what it PRODUCES that feeds the next screen.
+  await showStoryboard(page, {
+    title: 'SCREEN FLOW \u00b7 ONBOARD A NEW HOTEL',
+    steps: [
+      {
+        screen: 'LOGIN',
+        blank: '[email / password]',
+        filled: 'operator signs in',
+        action: 'Sign in',
+        produces: 'session token',
+      },
+      {
+        screen: 'PROPERTY',
+        blank: '[name / code / city]',
+        filled: 'The Riverside Hotel \u00b7 RV\u2026 \u00b7 London',
+        action: 'Create',
+        produces: 'POST /v1/properties => property exists',
+      },
+      {
+        screen: 'GUEST',
+        blank: '[guest name]',
+        filled: 'Dr. Rashida Ali',
+        action: 'Save',
+        produces: 'POST /v1/guests => guest on that property',
+      },
+      {
+        screen: 'BRIEF',
+        blank: '[no brief yet]',
+        filled: 'one click',
+        action: 'Generate',
+        produces: 'POST /v1/briefs/generate => brief from that property',
+      },
+    ],
+    outcome:
+      '\u201cHotel is live\u201d \u2014 the done screen shows the property + guest + brief we just created',
+    durationMs: 9_000,
+  });
+  await clearOverlay(page);
+
   const token = await signInAndGetToken(page, api);
 
-  // ---- BEAT 2: screen flow, explained, performed LIVE ----------------------
+  // ---- BEAT 3: screen flow, explained, performed LIVE ----------------------
   await page.goto(`${WEB_BASE}/onboarding`);
   await pause(page, 1_000);
 
