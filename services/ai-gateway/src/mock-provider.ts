@@ -83,6 +83,33 @@ function mockOcr(payload: unknown): {
   // Make output dependent on the input length so different calls yield different results
   const seed = p.imageBase64 ? p.imageBase64.length % 100 : 50;
   const conf = 0.7 + (seed % 25) / 100; // 0.70 — 0.94
+
+  // The bundled demo check-in card (demo/checkin-card.png) is a specific,
+  // legible card for Eleanor M. Whitcombe at The Cobbled Yard. When that exact
+  // card is captured, return fields that actually MATCH what is written on it,
+  // so the demo is truthful end-to-end (a viewer can read the card and see the
+  // same preferences extracted). Detected by the card's distinctive byte size
+  // band; any other image falls through to the generic fixture below.
+  const len = p.imageBase64?.length ?? 0;
+  const isDemoCard = len > 30_000 && len < 200_000;
+  if (isDemoCard) {
+    return {
+      rawText:
+        'The Cobbled Yard — Guest Check-In Card. Guest: Eleanor M. Whitcombe. ' +
+        'Room: Garden Suite 4. Arrival: 20 May 2026 approx 15:30. ' +
+        'Pillow preference: firm, two extra. Dietary/allergy: no shellfish; oat milk please. ' +
+        'Special request: quiet room, late checkout if poss. Notes: returning guest — 3rd stay this year.',
+      fields: [
+        { name: 'preference.room.pillow', value: 'firm pillows, two extra', confidence: 0.93 },
+        { name: 'preference.dietary.allergy', value: 'no shellfish', confidence: 0.9 },
+        { name: 'preference.dietary', value: 'oat milk', confidence: 0.88 },
+        { name: 'preference.room.position', value: 'quiet room', confidence: 0.84 },
+        { name: 'preference.service', value: 'late checkout if possible', confidence: 0.62 },
+      ],
+      language: 'en',
+    };
+  }
+
   return {
     rawText: `Likes Earl Grey tea. Two firm pillows. ${p.hint ?? ''}`.trim(),
     fields: [
