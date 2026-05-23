@@ -16,6 +16,13 @@ import {
 } from './clip-helpers';
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
+// Prep is generated D-1: prepDate covers arrivals on prepDate+1. The demo's
+// arrivals are today, so the prep date that covers them is yesterday.
+function prepDateIso(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 
 test('clip-05-prep', async ({ page, playwright }) => {
   test.setTimeout(120_000);
@@ -32,6 +39,15 @@ test('clip-05-prep', async ({ page, playwright }) => {
 
   const token = await signInAndGetToken(page, api);
 
+  // Prep cards are produced on demand (D-1). Generate the ones covering the
+  // demo's arrivals so the screen has real cards to show.
+  await liveCall(api, token, 'POST', '/v1/prep-cards/generate', {
+    propertyId: DEMO_PROPERTY_ID,
+    prepDate: prepDateIso(),
+    force: true,
+    includeWarmNote: true,
+  });
+
   // ---- SCREEN FLOW storyboard (its own beat, before the live prep cards) --
   await showStoryboard(page, {
     title: 'SCREEN FLOW \u00b7 HOUSEKEEPING PREP',
@@ -46,6 +62,14 @@ test('clip-05-prep', async ({ page, playwright }) => {
   await clearOverlay(page);
 
   await page.goto(`${WEB_BASE}/prep-cards`);
+  await pause(page, 800);
+  // The page defaults to today (empty here); set the date input to the D-1
+  // date that has the generated cards so the real cards render on screen.
+  const dateInput = page.getByTestId('prep-date');
+  if (await dateInput.isVisible({ timeout: 6_000 }).catch(() => false)) {
+    await dateInput.fill(prepDateIso());
+    await dateInput.blur().catch(() => {});
+  }
   await pause(page, 1_400);
 
   await showStepBanner(page, {
@@ -64,7 +88,7 @@ test('clip-05-prep', async ({ page, playwright }) => {
   await pause(page, 1_000);
   await clearBanner(page);
 
-  const cards = await liveCall(api, token, 'GET', `/v1/properties/${DEMO_PROPERTY_ID}/prep-cards/${todayIso()}`);
+  const cards = await liveCall(api, token, 'GET', `/v1/properties/${DEMO_PROPERTY_ID}/prep-cards/${prepDateIso()}`);
   const items = (cards.body as { items?: Array<{ display_name?: string; prep_items?: string[] }> })?.items ?? [];
   const withItems = items.filter((c) => (c.prep_items?.length ?? 0) > 0).length;
 
