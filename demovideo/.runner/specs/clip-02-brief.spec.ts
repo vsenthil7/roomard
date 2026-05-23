@@ -30,6 +30,13 @@ test('clip-02-brief', async ({ page, playwright }) => {
 
   const token = await signInAndGetToken(page, api);
 
+  // Today's brief is produced on demand (not auto-created); generate it live
+  // so the screen has a real, fresh brief to show.
+  await liveCall(api, token, 'POST', '/v1/briefs/generate', {
+    propertyId: DEMO_PROPERTY_ID,
+    force: true,
+  });
+
   // ---- SCREEN FLOW storyboard (its own beat, before the live brief) -------
   await showStoryboard(page, {
     title: 'SCREEN FLOW \u00b7 THE MORNING BRIEF',
