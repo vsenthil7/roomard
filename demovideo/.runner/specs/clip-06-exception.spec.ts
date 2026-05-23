@@ -113,6 +113,18 @@ test('clip-06-exception', async ({ page, playwright }) => {
   });
   await pause(page, 2_600);
 
+  // The exceptions list is React-Query backed; on first paint its 'open' cache
+  // can be empty even though the item exists. Wait for a Resolve button to
+  // render, and reload once if it doesn't, so the click below always has a
+  // real target. (This was the cause of earlier resolve-did-nothing runs.)
+  const anyResolve = page.getByTestId('exception-list').getByRole('button', { name: 'Resolve' }).first();
+  let listReady = await anyResolve.isVisible({ timeout: 6_000 }).catch(() => false);
+  if (!listReady) {
+    await page.reload();
+    await pause(page, 1_500);
+    listReady = await anyResolve.isVisible({ timeout: 8_000 }).catch(() => false);
+  }
+
   if (targetId) {
     await showStepBanner(page, {
       stepLabel: 'SCREEN 1 \u00b7 RESOLVE IT',
@@ -138,7 +150,7 @@ test('clip-06-exception', async ({ page, playwright }) => {
     clickedId = clickedTestId.startsWith('resolve-') ? clickedTestId.slice('resolve-'.length) : targetId;
     await resolveBtn.scrollIntoViewIfNeeded().catch(() => {});
     await pause(page, 500);
-    await resolveBtn.click({ timeout: 10_000 }).catch(() => {});
+    await resolveBtn.click({ timeout: 10_000 });
     await pause(page, 1_800);
 
     await showStepBanner(page, {
