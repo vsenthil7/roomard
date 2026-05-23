@@ -28,7 +28,7 @@
  * The guest + capture created here are cleaned up by the session after recording
  * so the demo tenant returns to its baseline (1 property / 3 guests).
  */
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as path from 'node:path';
 import {
   showSceneCard, showStepBanner, showStoryboard, showVerdict, clearBanner, clearOverlay,
@@ -180,4 +180,11 @@ test('clip-04-capture', async ({ page, playwright }) => {
   });
   await pause(page, 5_500);
   await clearOverlay(page);
+
+  // The verdict panel above is for the VIEWER; these assertions make the TEST
+  // genuinely fail if the truthful flow did not actually happen — so a recorded
+  // clip can never show green badges while the runner quietly passes a lie.
+  expect(appeared, 'capture must process live (result card), not the offline path').toBe('result');
+  expect(eleanorException, 'low-confidence card must route to the exception queue').toBe(true);
+  expect(activePrefs, 'prefs must NOT be written to the guest until the exception is resolved').toBe(0);
 });
