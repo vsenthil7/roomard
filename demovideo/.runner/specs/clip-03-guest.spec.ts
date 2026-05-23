@@ -10,9 +10,9 @@
  *   3) LIVE TEST  — assert preferences exist, the say-this greeting is real, and
  *                   the complaint-trajectory analysis returns a decision.
  */
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
-  showSceneCard, showStepBanner, showVerdict, clearBanner, clearOverlay,
+  showSceneCard, showStepBanner, showStoryboard, showVerdict, clearBanner, clearOverlay,
   scrollTopToBottom, signInAndGetToken, liveCall, highlightAndClick, pause,
   WEB_BASE,
 } from './clip-helpers';
@@ -37,6 +37,19 @@ test('clip-03-guest', async ({ page, playwright }) => {
   const arr = (guests.body as { items?: Array<{ id: string; display_name?: string }> })?.items ?? [];
   const james = arr.find((g) => (g.display_name ?? '').includes('James')) ?? arr[0];
   const gid = james?.id ?? '';
+
+  // ---- SCREEN FLOW storyboard (its own beat, before the live profile) ----
+  await showStoryboard(page, {
+    title: 'SCREEN FLOW \u00b7 KNOW THE GUEST',
+    steps: [
+      { screen: 'PROFILE', blank: '[open guest]', filled: 'learned preferences + confidence', action: 'Read', produces: 'GET /guests/{id}/preferences => what we know' },
+      { screen: 'HISTORY', blank: '[past stays]', filled: 'stays + issues', action: 'Review', produces: 'context the agent can rely on' },
+      { screen: 'SAY THIS', blank: '[no script]', filled: 'top preferences', action: 'Generate', produces: 'ERNIE => a one-line greeting to use now' },
+    ],
+    outcome: 'The agent sounds like they remember the guest \u2014 because the system does',
+    durationMs: 9_000,
+  });
+  await clearOverlay(page);
 
   await page.goto(`${WEB_BASE}/guests/${gid}`);
   await pause(page, 1_400);
@@ -87,4 +100,10 @@ test('clip-03-guest', async ({ page, playwright }) => {
   });
   await pause(page, 5_000);
   await clearOverlay(page);
+
+  // Hard assertions \u2014 a false verdict row fails the test.
+  expect(prefCount, 'guest must have at least one preference').toBeGreaterThanOrEqual(1);
+  expect(cardShown, 'the Say-this card must render on screen').toBe(true);
+  expect(greeting, 'greeting must be real text').not.toBe('');
+  expect(typeof flagged, 'trajectory must return a decision').toBe('boolean');
 });

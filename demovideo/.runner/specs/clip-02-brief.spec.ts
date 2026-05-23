@@ -8,9 +8,9 @@
  *                    issue, and the ready-to-say greeting + preference callouts.
  *   3) LIVE TEST  — assert the brief has the ranked arrivals + the attention flag.
  */
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
-  showSceneCard, showStepBanner, showVerdict, clearBanner, clearOverlay,
+  showSceneCard, showStepBanner, showStoryboard, showVerdict, clearBanner, clearOverlay,
   scrollTopToBottom, signInAndGetToken, liveCall, pause,
   WEB_BASE, DEMO_PROPERTY_ID,
 } from './clip-helpers';
@@ -29,6 +29,20 @@ test('clip-02-brief', async ({ page, playwright }) => {
   await clearOverlay(page);
 
   const token = await signInAndGetToken(page, api);
+
+  // ---- SCREEN FLOW storyboard (its own beat, before the live brief) -------
+  await showStoryboard(page, {
+    title: 'SCREEN FLOW \u00b7 THE MORNING BRIEF',
+    steps: [
+      { screen: 'ARRIVALS', blank: '[today\u2019s bookings]', filled: 'each guest + history', action: 'Rank', produces: 'GET /briefs/today => arrivals ordered by who needs care' },
+      { screen: 'ATTENTION', blank: '[unranked]', filled: 'recent issues surfaced', action: 'Flag', produces: 'the guest with an open issue is ranked first' },
+      { screen: 'SAY THIS', blank: '[no script]', filled: 'top preferences', action: 'Draft', produces: 'ERNIE 4.5 => a ready greeting per card' },
+    ],
+    outcome: 'The shift\u2019s shape in one screen \u2014 who\u2019s coming, who needs care, what to say',
+    durationMs: 9_000,
+  });
+  await clearOverlay(page);
+
   await page.goto(`${WEB_BASE}/`);
   await pause(page, 1_400);
 
@@ -73,4 +87,10 @@ test('clip-02-brief', async ({ page, playwright }) => {
   });
   await pause(page, 4_800);
   await clearOverlay(page);
+
+  // Hard assertions \u2014 a false verdict row fails the test.
+  expect(brief.status, 'brief must load').toBe(200);
+  expect(arrivals, 'three ranked arrivals expected').toBe(3);
+  expect(items, 'three brief cards expected').toBe(3);
+  expect(attention, 'at least one guest flagged for attention').toBeGreaterThanOrEqual(1);
 });

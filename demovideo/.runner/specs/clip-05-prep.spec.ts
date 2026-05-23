@@ -8,9 +8,9 @@
  *                    screen scrolls through them.
  *   3) LIVE TEST  — assert one card per arriving room, each with real prep items.
  */
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
-  showSceneCard, showStepBanner, showVerdict, clearBanner, clearOverlay,
+  showSceneCard, showStepBanner, showStoryboard, showVerdict, clearBanner, clearOverlay,
   scrollTopToBottom, signInAndGetToken, liveCall, pause,
   WEB_BASE, DEMO_PROPERTY_ID,
 } from './clip-helpers';
@@ -31,6 +31,20 @@ test('clip-05-prep', async ({ page, playwright }) => {
   await clearOverlay(page);
 
   const token = await signInAndGetToken(page, api);
+
+  // ---- SCREEN FLOW storyboard (its own beat, before the live prep cards) --
+  await showStoryboard(page, {
+    title: 'SCREEN FLOW \u00b7 HOUSEKEEPING PREP',
+    steps: [
+      { screen: 'ARRIVALS', blank: '[tomorrow\u2019s rooms]', filled: 'each room + guest', action: 'Build', produces: 'GET /prep-cards/{date} => one card per room' },
+      { screen: 'PREFERENCES', blank: '[raw prefs]', filled: 'allergies, pillows, temp', action: 'Translate', produces: 'a room-prep checklist per card' },
+      { screen: 'CARD', blank: '[empty]', filled: 'the items that matter', action: 'Show', produces: 'housekeeper sees exactly what to set up' },
+    ],
+    outcome: 'A captured \u201ctwo firm pillows\u201d flows straight onto the housekeeper\u2019s card',
+    durationMs: 9_000,
+  });
+  await clearOverlay(page);
+
   await page.goto(`${WEB_BASE}/prep-cards`);
   await pause(page, 1_400);
 
@@ -65,4 +79,9 @@ test('clip-05-prep', async ({ page, playwright }) => {
   });
   await pause(page, 4_800);
   await clearOverlay(page);
+
+  // Hard assertions \u2014 a false verdict row fails the test.
+  expect(cards.status, 'prep cards must load').toBe(200);
+  expect(items.length, 'one card per arriving room (3)').toBe(3);
+  expect(withItems, 'cards must carry real prep items').toBeGreaterThanOrEqual(1);
 });
