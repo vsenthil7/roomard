@@ -54,6 +54,7 @@ test('clip-06-exception', async ({ page, playwright }) => {
     openItems.find((i) => i.kind === 'low_ocr_confidence') ??
     openItems[0];
   const targetId = target?.id ?? '';
+  let clickedId = targetId; // updated to the actually-clicked item's id below
   const targetGuestId = target?.guest_id ?? '';
 
   // Preferences on that guest BEFORE resolution (should be 0 for the held card).
@@ -125,11 +126,16 @@ test('clip-06-exception', async ({ page, playwright }) => {
     // the API call above, which previously caused a click that waited out the whole
     // timeout). Prefer the exact testid if present, else the first rendered Resolve
     // button in the list. Every step is timeout-guarded so nothing can hang.
+    // Resolve the item ACTUALLY ON SCREEN, and read its id back FROM the button
+    // it (testid `resolve-<id>`), so the API verification below checks the exact
+    // same exception we clicked — immune to list ordering / cache differences.
     const exactBtn = page.getByTestId(`resolve-${targetId}`);
     const hasExact = await exactBtn.isVisible({ timeout: 4_000 }).catch(() => false);
     const resolveBtn = hasExact
       ? exactBtn
       : page.getByTestId('exception-list').getByRole('button', { name: 'Resolve' }).first();
+    const clickedTestId = (await resolveBtn.getAttribute('data-testid').catch(() => null)) ?? '';
+    clickedId = clickedTestId.startsWith('resolve-') ? clickedTestId.slice('resolve-'.length) : targetId;
     await resolveBtn.scrollIntoViewIfNeeded().catch(() => {});
     await pause(page, 500);
     await resolveBtn.click({ timeout: 10_000 }).catch(() => {});
@@ -150,18 +156,22 @@ test('clip-06-exception', async ({ page, playwright }) => {
 
   // ---- BEAT 4: live test that MATCHES the flow we just showed ---------------
   let nowStatus = 'n/a';
-  if (targetId) {
+  let resolvedGuestId = targetGuestId;
+  if (clickedId) {
     const after = await liveCall(api, token, 'GET', '/v1/exceptions?status=resolved&limit=100');
-    const resolved = (after.body as { items?: Array<{ id: string; status: string }> })?.items ?? [];
-    nowStatus = resolved.find((i) => i.id === targetId)?.status ?? 'not-in-resolved';
+    const resolved =
+      (after.body as { items?: Array<{ id: string; status: string; guest_id?: string | null }> })?.items ?? [];
+    const rec = resolved.find((i) => i.id === clickedId);
+    nowStatus = rec?.status ?? 'not-in-resolved';
+    resolvedGuestId = rec?.guest_id ?? targetGuestId;
   }
   // The lineage payoff: the guest that owned the flagged card now has the
   // preferences that were held back until a human confirmed them.
-  const prefsAfter = targetGuestId
-    ? await liveCall(api, token, 'GET', `/v1/guests/${targetGuestId}/preferences`)
+  const prefsAfter = resolvedGuestId
+    ? await liveCall(api, token, 'GET', `/v1/guests/${resolvedGuestId}/preferences`)
     : { body: { items: [] } };
   const countAfter = ((prefsAfter.body as { items?: unknown[] })?.items ?? []).length;
-  const prefsLanded = !!targetGuestId && countAfter > countBefore;
+  const prefsLanded = !!resolvedGuestId && countAfter > countBefore;
 
   await showVerdict(page, {
     title: 'UC-23 \u00b7 EXCEPTION RESOLUTION',
