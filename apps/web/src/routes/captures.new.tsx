@@ -9,7 +9,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { createRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { apiFetch, ApiError } from '../lib/api.js';
@@ -54,6 +54,16 @@ function CaptureNew() {
   const [result, setResult] = useState<CaptureResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queued, setQueued] = useState(false);
+
+  // Preview the chosen card image so the agent can confirm it's legible before
+  // uploading. Object URL is revoked when the file changes or the component
+  // unmounts to avoid leaking blob URLs.
+  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const { register, handleSubmit } = useForm<CaptureForm>({
     defaultValues: { propertyId: localStorage.getItem('roomard.lastPropertyId') ?? '' },
@@ -202,6 +212,15 @@ function CaptureNew() {
               data-testid="capture-file"
             />
             {file && <div className="text-xs text-roomard-700 mt-1">{file.name} · {(file.size / 1024).toFixed(0)} KB</div>}
+            {previewUrl && (
+              <div className="mt-2" data-testid="capture-preview">
+                <img
+                  src={previewUrl}
+                  alt="Selected check-in card"
+                  className="max-h-64 rounded border border-roomard-200 object-contain"
+                />
+              </div>
+            )}
           </div>
           <button type="submit" className="btn-primary w-full" data-testid="capture-submit" disabled={!file}>
             Upload capture
