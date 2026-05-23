@@ -2,10 +2,12 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-23 05:42 BST (CP-97)
+**Last updated:** 2026-05-23 06:11 BST (CP-98)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
 
-> **CP-97 (handover docs):** added `docs/NEXT_SESSION_HANDOVER.md` (read-first on a fresh page: the 3-beat demo standard incl. the missing step-2 STORYBOARD requirement, the commit-first→push→test→traceability discipline, the card↔extraction truthfulness bug found at 05:32, env/MCP notes, and the rework plan) and `docs/MEMORY_AND_RULES_DRAFT.md` (a thin-memory + rule-index draft for the user to paste into the Claude Project — Claude cannot edit Project memory/rules itself). NOTE: a separate uncommitted fix to `services/ai-gateway/src/mock-provider.ts` (demo-card OCR now matches the actual card) is pending its test updates before commit.
+> **CP-98 (docs cleanup — wrong-place handover removed):** The CP-97 files `docs/NEXT_SESSION_HANDOVER.md` and `docs/MEMORY_AND_RULES_DRAFT.md` were in the WRONG location. Per the established session-management convention, the next-session START prompt belongs at the PROJECT ROOT in `session_prompts/` (NOT in the code repo's `docs/`). Both removed from the repo (backed up to `_session/_backup/20260523-0610_docs_session_files_pre_rm/` first). The handover content now lives at `0009_AT_Hack0019_Roomard/session_prompts/002-03_START_20260523-0610_demo-storyboard-rework.md`. Session lessons go to `claude-memory/global/lessons/`. No real design docs touched; the `roomard_*` docs + TRACEABILITY remain. NOTE: the `mock-provider.ts` demo-card truthfulness fix is still uncommitted pending test updates (next session).
+
+> **CP-97 (handover docs — SUPERSEDED by CP-98, wrong location):** added `docs/NEXT_SESSION_HANDOVER.md` (read-first on a fresh page: the 3-beat demo standard incl. the missing step-2 STORYBOARD requirement, the commit-first→push→test→traceability discipline, the card↔extraction truthfulness bug found at 05:32, env/MCP notes, and the rework plan) and `docs/MEMORY_AND_RULES_DRAFT.md` (a thin-memory + rule-index draft for the user to paste into the Claude Project — Claude cannot edit Project memory/rules itself). NOTE: a separate uncommitted fix to `services/ai-gateway/src/mock-provider.ts` (demo-card OCR now matches the actual card) is pending its test updates before commit.
 
 > **CP-96 (housekeeping):** added `demo/README.md` explaining the action-driven walkthrough (three-beat structure, per-clip breakdown, how to regenerate) and removed a stale committed cut (`...20260521_092058-main.mp4`) that the action-driven CP-95 video supersedes. The single committed walkthrough is now `demo/roomard-walkthrough-20260522_205915-main.mp4`.
 
