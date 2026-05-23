@@ -131,7 +131,10 @@ test('clip-04-capture', async ({ page, playwright }) => {
   await page.getByTestId('capture-file').setInputFiles(DEMO_CARD);
   // Dwell on the rendered card image (the preview added to the capture UI).
   const preview = page.getByTestId('capture-preview');
-  await preview.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  const previewShown = await preview
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
   await pause(page, 2_600);
 
   await highlightAndClick(page, 'capture-submit');
@@ -172,7 +175,7 @@ test('clip-04-capture', async ({ page, playwright }) => {
     title: 'UC-01 \u00b7 CARD CAPTURE (OCR)',
     request: 'POST /v1/captures (multipart)  \u00b7  GET /v1/exceptions  \u00b7  GET /v1/guests/{id}/preferences',
     assertions: [
-      { label: 'Card image shown on screen before upload', expected: 'preview visible', actual: resultVisible || appeared ? 'shown' : 'no', pass: appeared === 'result' },
+      { label: 'Card image shown on screen before upload', expected: 'preview visible', actual: previewShown ? 'shown' : 'not shown', pass: previewShown },
       { label: 'Upload processed live (not the offline path)', expected: 'result card', actual: appeared || 'none', pass: appeared === 'result' },
       { label: 'Low-confidence field routed to review (honest)', expected: 'exception open', actual: eleanorException ? 'queued for review' : 'none', pass: eleanorException },
       { label: 'Not silently written to guest yet (review pending)', expected: '0 active prefs', actual: `${activePrefs} active`, pass: activePrefs === 0 },
@@ -184,6 +187,7 @@ test('clip-04-capture', async ({ page, playwright }) => {
   // The verdict panel above is for the VIEWER; these assertions make the TEST
   // genuinely fail if the truthful flow did not actually happen — so a recorded
   // clip can never show green badges while the runner quietly passes a lie.
+  expect(previewShown, 'the real card image must render on screen before upload').toBe(true);
   expect(appeared, 'capture must process live (result card), not the offline path').toBe('result');
   expect(eleanorException, 'low-confidence card must route to the exception queue').toBe(true);
   expect(activePrefs, 'prefs must NOT be written to the guest until the exception is resolved').toBe(0);
