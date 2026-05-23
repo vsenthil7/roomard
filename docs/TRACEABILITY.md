@@ -2,8 +2,10 @@
 
 **Purpose:** Live, updated-every-CP record of requirements → use cases → stories → code → tests → commit. Per CLAUDE_RULES this lives in `docs/` and is committed alongside every CP.
 
-**Last updated:** 2026-05-22 21:00 BST (CP-95)
+**Last updated:** 2026-05-23 04:50 BST (CP-96)
 **Live source of truth:** `origin/main` on https://github.com/vsenthil7/roomard
+
+> **CP-96 (housekeeping):** added `demo/README.md` explaining the action-driven walkthrough (three-beat structure, per-clip breakdown, how to regenerate) and removed a stale committed cut (`...20260521_092058-main.mp4`) that the action-driven CP-95 video supersedes. The single committed walkthrough is now `demo/roomard-walkthrough-20260522_205915-main.mp4`.
 
 **Total tests:** 357 passing, 0 failing (workspace unit suites; web 39/39; ai-gateway 45/45; api-gateway 19/19; guest tsc + tests green; capture + brief green); **12 real-DB integration tests** (guest 4, tenant 5, capture 3) idempotent + re-runnable via `scripts/run-integration-tests.bat`
 
