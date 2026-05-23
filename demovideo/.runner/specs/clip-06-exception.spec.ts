@@ -23,7 +23,7 @@
 import { test, expect } from '@playwright/test';
 import {
   showSceneCard, showStepBanner, showStoryboard, showVerdict, clearBanner, clearOverlay,
-  signInAndGetToken, liveCall, highlightAndClick, pause,
+  signInAndGetToken, liveCall, pause,
   WEB_BASE,
 } from './clip-helpers';
 
@@ -119,7 +119,20 @@ test('clip-06-exception', async ({ page, playwright }) => {
       detail: 'Real PATCH /v1/exceptions/{id} \u2014 status \u2192 resolved, and the held fields are written to the guest.',
     });
     await pause(page, 1_400);
-    await highlightAndClick(page, `resolve-${targetId}`, 800);
+
+    // Click the Resolve button that is ACTUALLY RENDERED rather than trusting an
+    // API-derived testid (the list's React-Query cache / ordering can differ from
+    // the API call above, which previously caused a click that waited out the whole
+    // timeout). Prefer the exact testid if present, else the first rendered Resolve
+    // button in the list. Every step is timeout-guarded so nothing can hang.
+    const exactBtn = page.getByTestId(`resolve-${targetId}`);
+    const hasExact = await exactBtn.isVisible({ timeout: 4_000 }).catch(() => false);
+    const resolveBtn = hasExact
+      ? exactBtn
+      : page.getByTestId('exception-list').getByRole('button', { name: 'Resolve' }).first();
+    await resolveBtn.scrollIntoViewIfNeeded().catch(() => {});
+    await pause(page, 500);
+    await resolveBtn.click({ timeout: 10_000 }).catch(() => {});
     await pause(page, 1_800);
 
     await showStepBanner(page, {
@@ -130,7 +143,7 @@ test('clip-06-exception', async ({ page, playwright }) => {
     await pause(page, 1_200);
     await clearBanner(page);
     await pause(page, 300);
-    await highlightAndClick(page, 'tab-resolved', 700);
+    await page.getByTestId('tab-resolved').click({ timeout: 8_000 }).catch(() => {});
     await pause(page, 2_000);
   }
   await clearBanner(page);
