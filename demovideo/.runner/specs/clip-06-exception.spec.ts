@@ -132,6 +132,10 @@ test('clip-06-exception', async ({ page, playwright }) => {
       detail: 'Real PATCH /v1/exceptions/{id} \u2014 status \u2192 resolved, and the held fields are written to the guest.',
     });
     await pause(page, 1_400);
+    // The banner sits top-right and overlays the Resolve button; clear it
+    // before clicking so it can't intercept the pointer.
+    await clearBanner(page);
+    await pause(page, 300);
 
     // Click the Resolve button that is ACTUALLY RENDERED rather than trusting an
     // API-derived testid (the list's React-Query cache / ordering can differ from
